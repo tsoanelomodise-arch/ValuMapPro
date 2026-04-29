@@ -1,0 +1,8 @@
+{
+  "name": "PropScope - Solar Property Evaluator",
+  "description": "Professional property evaluation tool with interactive mapping, distance measurement (ruler), and detailed financial analysis dashboard.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": []
+}
