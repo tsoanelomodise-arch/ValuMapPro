@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { mockProperties } from './data/mockProperties';
 import { Property } from './types';
 import MapComponent from './components/Map/MapComponent';
@@ -23,13 +23,25 @@ import {
   Download,
   X,
   Loader2,
-  ExternalLink
+  ExternalLink,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
-  const [properties, setProperties] = useState<Property[]>(mockProperties);
+  const [properties, setProperties] = useState<Property[]>(() => {
+    const saved = localStorage.getItem('propscope_properties');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return mockProperties;
+      }
+    }
+    return mockProperties;
+  });
   const [view, setView] = useState<'map' | 'list'>('map');
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -37,6 +49,11 @@ export default function App() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [listingNumber, setListingNumber] = useState('');
   const [isImporting, setIsImporting] = useState(false);
+  const [propertyToDelete, setPropertyToDelete] = useState<string | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem('propscope_properties', JSON.stringify(properties));
+  }, [properties]);
 
   const filteredProperties = properties.filter(p => 
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -45,6 +62,13 @@ export default function App() {
 
   const handleImport = async () => {
     if (!listingNumber) return;
+
+    // Validation: ensure listing number is numeric and has a valid length range
+    if (!/^\d{5,15}$/.test(listingNumber)) {
+      alert("Invalid format. Please enter a numeric listing number (e.g., 112233445).");
+      return;
+    }
+
     setIsImporting(true);
     try {
       // Import logic will rely on Gemini Search Grounding
@@ -130,6 +154,32 @@ export default function App() {
     }
   };
 
+  const handleDeleteProperty = (id: string) => {
+    setPropertyToDelete(id);
+  };
+
+  const confirmDelete = () => {
+    if (propertyToDelete) {
+      setProperties(prev => prev.filter(p => p.id !== propertyToDelete));
+      if (selectedProperty?.id === propertyToDelete) {
+        setSelectedProperty(null);
+      }
+      setPropertyToDelete(null);
+    }
+  };
+
+  const handleRestoreDefaults = () => {
+    if (confirm("Restore all mock properties? This will clear your current changes.")) {
+      setProperties(mockProperties);
+      localStorage.removeItem('propscope_properties');
+    }
+  };
+
+  const handleUpdateProperty = (updatedProperty: Property) => {
+    setProperties(prev => prev.map(p => p.id === updatedProperty.id ? updatedProperty : p));
+    setSelectedProperty(updatedProperty);
+  };
+
   return (
     <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
       {/* App Sidebar */}
@@ -168,7 +218,7 @@ export default function App() {
              </button>
           </div>
 
-          <SidebarLink icon={<Settings />} label="Settings" />
+          <SidebarLink icon={<Settings />} label="Restore Defaults" onClick={handleRestoreDefaults} />
         </nav>
 
         <div className="p-4 border-t border-slate-100 bg-slate-50/50">
@@ -262,6 +312,7 @@ export default function App() {
                     properties={filteredProperties} 
                     onSelectProperty={setSelectedProperty}
                     selectedProperty={selectedProperty}
+                    onDeleteProperty={handleDeleteProperty}
                  />
                )}
              </div>
@@ -297,7 +348,11 @@ export default function App() {
                 </div>
 
                 <div className="flex-1 overflow-hidden">
-                   <EvaluationDashboard property={selectedProperty} />
+                   <EvaluationDashboard 
+                    property={selectedProperty} 
+                    onDeleteProperty={handleDeleteProperty}
+                    onUpdateProperty={handleUpdateProperty}
+                   />
                 </div>
               </motion.div>
             )}
@@ -391,6 +446,52 @@ export default function App() {
                     <div className="w-4 h-4 bg-slate-400 rounded-sm" />
                     <span className="text-[9px] font-bold text-slate-900 uppercase">Maps Grounding</span>
                  </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {propertyToDelete && (
+          <div className="fixed inset-0 z-[3000] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setPropertyToDelete(null)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden relative z-10 border border-slate-200 p-8"
+            >
+              <div className="flex flex-col items-center text-center">
+                <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-6 border border-red-100">
+                  <AlertTriangle className="w-8 h-8 text-red-600" />
+                </div>
+                <h3 className="text-xl font-black text-slate-900 mb-2 italic">REMOVE RESOURCE?</h3>
+                <p className="text-xs text-slate-500 font-medium leading-relaxed mb-8">
+                  This property evaluation and all associated spatial data will be permanently removed from your collection.
+                </p>
+                
+                <div className="flex flex-col w-full gap-3">
+                  <button 
+                    onClick={confirmDelete}
+                    className="w-full bg-red-600 text-white font-black py-4 rounded-xl shadow-lg shadow-red-600/10 hover:bg-red-700 transition-all italic text-sm"
+                  >
+                    CONFIRM TERMINATION
+                  </button>
+                  <button 
+                    onClick={() => setPropertyToDelete(null)}
+                    className="w-full bg-slate-100 text-slate-600 font-black py-4 rounded-xl hover:bg-slate-200 transition-all italic text-sm"
+                  >
+                    CANCEL
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>

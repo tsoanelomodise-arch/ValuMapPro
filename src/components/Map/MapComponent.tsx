@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents, LayersControl } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents, LayersControl, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Property, PROPERTY_TYPE_COLORS } from '../../types';
 import { Ruler, X, Navigation2 } from 'lucide-react';
@@ -24,14 +24,38 @@ interface MapComponentProps {
   selectedProperty: Property | null;
 }
 
-const createColoredIcon = (color: string) => {
+const createColoredIcon = (color: string, isSelected: boolean = false) => {
+  const size = isSelected ? 32 : 24;
+  const pulseClass = isSelected ? 'marker-pulse' : '';
+  
   return L.divIcon({
     className: 'custom-div-icon',
-    html: `<div style="background-color: ${color}; width: 24px; height: 24px; border: 3px solid white; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
+    html: `
+      <div class="relative flex items-center justify-center">
+        ${isSelected ? `<div class="absolute w-12 h-12 rounded-full bg-blue-500/20 border border-blue-500/30 animate-ping"></div>` : ''}
+        <div class="${pulseClass}" style="background-color: ${color}; width: ${size}px; height: ${size}px; border: 3px solid white; border-radius: 50%; box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);"></div>
+      </div>
+    `,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
   });
 };
+
+// Component to handle map movements when selected property changes
+function MapController({ center }: { center: [number, number] }) {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (center) {
+      map.flyTo(center, 15, {
+        duration: 1.5,
+        easeLinearity: 0.25
+      });
+    }
+  }, [center, map]);
+  
+  return null;
+}
 
 export default function MapComponent({ properties, onSelectProperty, selectedProperty }: MapComponentProps) {
   const [rulerActive, setRulerActive] = useState(false);
@@ -72,39 +96,41 @@ export default function MapComponent({ properties, onSelectProperty, selectedPro
   }, [rulerActive]);
 
   return (
-    <div className="relative w-full h-full rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+    <div className="relative w-full h-full rounded-xl overflow-hidden border border-slate-200 shadow-sm border-2">
       <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }} zoomControl={false}>
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
 
+        <MapController center={selectedProperty ? selectedProperty.coordinates : center} />
+
         <LayersControl position="topright">
           <LayersControl.Overlay checked name="Residential">
-            <LayerGroup type="Residential" properties={properties} onSelect={onSelectProperty} />
+            <LayerGroup type="Residential" properties={properties} onSelect={onSelectProperty} selectedId={selectedProperty?.id} />
           </LayersControl.Overlay>
           <LayersControl.Overlay checked name="Commercial">
-            <LayerGroup type="Commercial" properties={properties} onSelect={onSelectProperty} />
+            <LayerGroup type="Commercial" properties={properties} onSelect={onSelectProperty} selectedId={selectedProperty?.id} />
           </LayersControl.Overlay>
           <LayersControl.Overlay checked name="Industrial">
-            <LayerGroup type="Industrial" properties={properties} onSelect={onSelectProperty} />
+            <LayerGroup type="Industrial" properties={properties} onSelect={onSelectProperty} selectedId={selectedProperty?.id} />
           </LayersControl.Overlay>
           <LayersControl.Overlay checked name="Vacant Land">
-            <LayerGroup type="Vacant Land" properties={properties} onSelect={onSelectProperty} />
+            <LayerGroup type="Vacant Land" properties={properties} onSelect={onSelectProperty} selectedId={selectedProperty?.id} />
           </LayersControl.Overlay>
         </LayersControl>
 
         {rulerPoints.map((point, idx) => (
           <Marker key={idx} position={point} icon={L.divIcon({
             className: 'ruler-marker',
-            html: `<div class="w-3 h-3 bg-white border-2 border-black rounded-full"></div>`,
-            iconSize: [12, 12],
-            iconAnchor: [6, 6]
+            html: `<div class="w-4 h-4 bg-white border-2 border-slate-900 rounded-full shadow-lg"></div>`,
+            iconSize: [16, 16],
+            iconAnchor: [8, 8]
           })} />
         ))}
 
         {rulerPoints.length === 2 && (
-          <Polyline positions={rulerPoints} color="#000" weight={2} dashArray="5, 10" />
+          <Polyline positions={rulerPoints} color="#2563eb" weight={3} dashArray="8, 12" />
         )}
 
         <MapEvents />
@@ -199,22 +225,27 @@ export default function MapComponent({ properties, onSelectProperty, selectedPro
   );
 }
 
-function LayerGroup({ type, properties, onSelect }: { type: string, properties: Property[], onSelect: (p: Property) => void }) {
+function LayerGroup({ type, properties, onSelect, selectedId }: { type: string, properties: Property[], onSelect: (p: Property) => void, selectedId?: string }) {
   return (
     <>
       {properties.filter(p => p.type === type).map(property => (
         <Marker
           key={property.id}
           position={property.coordinates}
-          icon={createColoredIcon(PROPERTY_TYPE_COLORS[property.type as keyof typeof PROPERTY_TYPE_COLORS])}
+          icon={createColoredIcon(
+            PROPERTY_TYPE_COLORS[property.type as keyof typeof PROPERTY_TYPE_COLORS],
+            selectedId === property.id
+          )}
+          zIndexOffset={selectedId === property.id ? 1000 : 0}
           eventHandlers={{
             click: () => onSelect(property),
           }}
         >
           <Popup>
-            <div className="p-1">
-              <p className="font-bold text-sm leading-none m-0">{property.name}</p>
-              <p className="text-xs text-gray-500 m-0 mt-1">{property.address.street}</p>
+            <div className="p-1 min-w-[120px]">
+              <p className="font-bold text-sm leading-none m-0 text-slate-900">{property.name}</p>
+              <p className="text-[10px] text-slate-500 m-0 mt-1 uppercase font-bold">{property.type}</p>
+              <p className="text-[11px] text-slate-400 m-0 mt-2 italic">{property.address.street}</p>
             </div>
           </Popup>
         </Marker>

@@ -1,15 +1,16 @@
 import React from 'react';
 import { Property, PROPERTY_TYPE_COLORS } from '../../types';
 import { formatCurrency } from '../../lib/utils';
-import { Home, MapPin, Ruler, Scaling, ArrowUpRight } from 'lucide-react';
+import { Home, MapPin, Ruler, Scaling, ArrowUpRight, Trash2 } from 'lucide-react';
 
 interface ListViewProps {
   properties: Property[];
   onSelectProperty: (property: Property) => void;
   selectedProperty?: Property | null;
+  onDeleteProperty?: (id: string) => void;
 }
 
-export default function ListView({ properties, onSelectProperty, selectedProperty }: ListViewProps) {
+export default function ListView({ properties, onSelectProperty, selectedProperty, onDeleteProperty }: ListViewProps) {
   return (
     <div className="bg-white overflow-hidden rounded-xl border border-slate-200">
       <div className="overflow-x-auto">
@@ -67,9 +68,23 @@ export default function ListView({ properties, onSelectProperty, selectedPropert
                    </div>
                 </td>
                 <td className="px-6 py-5 text-right">
-                  <button className="p-2.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50/50 rounded-xl transition-all border border-transparent hover:border-blue-100">
-                    <ArrowUpRight className="w-5 h-5" />
-                  </button>
+                  <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                    <button 
+                      onClick={() => onSelectProperty(property)}
+                      className="p-2.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50/50 rounded-xl transition-all border border-transparent hover:border-blue-100"
+                    >
+                      <ArrowUpRight className="w-5 h-5" />
+                    </button>
+                    {onDeleteProperty && (
+                      <button 
+                        onClick={() => onDeleteProperty(property.id)}
+                        className="p-2.5 text-slate-300 hover:text-red-600 hover:bg-red-50/50 rounded-xl transition-all border border-transparent hover:border-red-100"
+                        title="Delete Property"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
