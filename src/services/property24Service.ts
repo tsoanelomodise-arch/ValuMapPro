@@ -26,7 +26,7 @@ export const propertyExtractorSchema = {
   type: Type.OBJECT,
   properties: {
     name: { type: Type.STRING, description: "Name of the property or complex" },
-    type: { type: Type.STRING, description: "One of: Residential, Commercial, Industrial, Vacant Land" },
+    type: { type: Type.STRING, description: "One of: Residential, Commercial, Industrial, Agricultural. Never return 'Vacant Land'. If it is an empty stand, infer the zoning/classification from the surrounding properties or intended use." },
     address: {
       type: Type.OBJECT,
       properties: {

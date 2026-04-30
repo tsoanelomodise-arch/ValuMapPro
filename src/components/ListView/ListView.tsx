@@ -1,95 +1,112 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Property, PROPERTY_TYPE_COLORS } from '../../types';
 import { formatCurrency } from '../../lib/utils';
-import { Home, MapPin, Ruler, Scaling, ArrowUpRight, Trash2 } from 'lucide-react';
+import { MapPin, Ruler, Scaling, ArrowUpRight, Trash2, Edit3 } from 'lucide-react';
 
 interface ListViewProps {
   properties: Property[];
   onSelectProperty: (property: Property) => void;
+  onOpenDetails: (property: Property) => void;
+  onEditProperty?: (property: Property) => void;
   selectedProperty?: Property | null;
   onDeleteProperty?: (id: string) => void;
 }
 
-export default function ListView({ properties, onSelectProperty, selectedProperty, onDeleteProperty }: ListViewProps) {
+export default function ListView({ properties, onSelectProperty, onOpenDetails, onEditProperty, selectedProperty, onDeleteProperty }: ListViewProps) {
   return (
-    <div className="bg-white overflow-hidden rounded-xl border border-slate-200">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Resource Entity</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sector</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Metrics</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Valuation</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Reference</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 italic">
-            {properties.map((property) => (
-              <tr 
-                key={property.id} 
-                className={`hover:bg-slate-50/80 transition-colors group cursor-pointer ${selectedProperty?.id === property.id ? 'bg-blue-50/30' : ''}`}
-                onClick={() => onSelectProperty(property)}
-              >
-                <td className="px-6 py-5">
-                  <div className="flex items-center gap-4">
-                    <div className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm">
-                      <Home className="w-5 h-5 text-slate-400 group-hover:text-blue-600 transition-colors" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-slate-800 leading-none mb-1.5">{property.name}</p>
-                      <p className="text-[11px] text-slate-400 font-medium flex items-center gap-1.5 non-italic">
-                        <MapPin className="w-3.5 h-3.5" /> {property.address.street}, {property.address.suburb}
-                      </p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-5">
-                  <span 
-                    className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-tighter"
-                    style={{ 
-                      backgroundColor: `${PROPERTY_TYPE_COLORS[property.type as keyof typeof PROPERTY_TYPE_COLORS]}15`,
-                      color: PROPERTY_TYPE_COLORS[property.type as keyof typeof PROPERTY_TYPE_COLORS]
-                    }}
-                  >
-                    {property.type}
-                  </span>
-                </td>
-                <td className="px-6 py-5">
-                  <div className="flex items-center gap-4 text-xs text-slate-500 font-semibold non-italic">
-                    {property.specs.bedrooms > 0 && <span className="flex items-center gap-1.5"><Scaling className="w-3.5 h-3.5 text-slate-300" /> {property.specs.bedrooms} BR</span>}
-                    <span className="flex items-center gap-1.5 italic font-bold text-slate-700">{property.specs.floorSize}m²</span>
-                  </div>
-                </td>
-                <td className="px-6 py-5">
-                   <div className="flex flex-col">
-                      <span className="text-sm font-black text-slate-900 tracking-tight">{formatCurrency(property.financials.purchasePrice)}</span>
-                      <span className="text-[9px] text-slate-400 font-bold uppercase">Estimated Market</span>
-                   </div>
-                </td>
-                <td className="px-6 py-5 text-right">
-                  <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                    <button 
-                      onClick={() => onSelectProperty(property)}
-                      className="p-2.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50/50 rounded-xl transition-all border border-transparent hover:border-blue-100"
-                    >
-                      <ArrowUpRight className="w-5 h-5" />
-                    </button>
-                    {onDeleteProperty && (
-                      <button 
-                        onClick={() => onDeleteProperty(property.id)}
-                        className="p-2.5 text-slate-300 hover:text-red-600 hover:bg-red-50/50 rounded-xl transition-all border border-transparent hover:border-red-100"
-                        title="Delete Property"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    )}
-                  </div>
-                </td>
+    <div className="flex flex-col h-full gap-4">
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex-1">
+        <div className="overflow-x-auto h-full custom-scrollbar">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/50 border-b border-slate-100">
+                <th className="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Property</th>
+                <th className="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-center">Zoning</th>
+                <th className="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-center">Erf Size</th>
+                <th className="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Listing Price</th>
+                <th className="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {properties.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-12 text-center text-slate-400 text-xs font-medium">
+                    No results found in current index.
+                  </td>
+                </tr>
+              ) : (
+                properties.map((property) => (
+                  <tr 
+                    key={property.id} 
+                    className={`hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50 ${selectedProperty?.id === property.id ? 'bg-indigo-50/50' : ''}`}
+                    onClick={() => onSelectProperty(property)}
+                  >
+                    <td className="px-6 py-5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-slate-50 rounded-lg flex items-center justify-center shrink-0 border border-slate-100">
+                          <MapPin className="w-4 h-4 text-slate-400" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900 tracking-tight">{property.name}</p>
+                          <p className="text-[11px] text-slate-500 font-medium">
+                            {property.address.suburb}, {property.address.city}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-5 text-center">
+                      <span 
+                        className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest bg-slate-100 text-slate-600"
+                      >
+                        {property.type}
+                      </span>
+                    </td>
+                    <td className="px-6 py-5 text-center">
+                      <span className="text-sm font-bold text-slate-700">
+                        {property.specs.standSize} m²
+                      </span>
+                    </td>
+                    <td className="px-6 py-5">
+                       <div className="flex flex-col">
+                          <span className="text-lg font-bold text-slate-900 tracking-tight tabular-nums">{formatCurrency(property.financials.purchasePrice)}</span>
+                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Market Value</span>
+                       </div>
+                    </td>
+                    <td className="px-6 py-5" onClick={(e) => e.stopPropagation()}>
+                       <div className="flex items-center justify-end gap-2">
+                          <button 
+                            onClick={() => onOpenDetails(property)}
+                            className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                            title="View Details"
+                          >
+                            <ArrowUpRight className="w-4 h-4" />
+                          </button>
+                          {onEditProperty && (
+                            <button 
+                              onClick={() => onEditProperty(property)}
+                              className="p-2.5 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-all"
+                              title="Edit Record"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                          )}
+                          {onDeleteProperty && (
+                            <button 
+                              onClick={() => onDeleteProperty(property.id)}
+                              className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                              title="Remove Record"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
