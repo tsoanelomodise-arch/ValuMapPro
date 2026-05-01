@@ -14,10 +14,16 @@ import {
   Scaling,
   Layers,
   Map as MapIcon,
-  ExternalLink
+  ExternalLink,
+  FileDown
 } from 'lucide-react';
 import { cn, calculateDistance } from '../../lib/utils';
 import MapDetailsOverlay from './MapDetailsOverlay';
+import ExportSelectionOverlay from './ExportSelectionOverlay';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
+
+const CLASSIC_RED = '#EA4335';
 
 // Custom component to integrate esri-leaflet with react-leaflet
 function EsriDynamicLayer({ url, layers, opacity, visible }: { url: string, layers?: number[], opacity: number, visible: boolean }) {
@@ -37,7 +43,7 @@ function EsriDynamicLayer({ url, layers, opacity, visible }: { url: string, laye
       const options: any = {
         url,
         opacity,
-        useCors: false,
+        useCors: true,
         zIndex: 400,
         format: 'png32'
       };
@@ -107,29 +113,71 @@ interface MapComponentProps {
   onFullscreenChange: (fullscreen: boolean) => void;
 }
 
-const createColoredIcon = (color: string, isSelected: boolean = false, label?: string, distanceLabel?: string) => {
-  const width = isSelected ? 32 : 24;
+// Memoized Distance Lines for performance and stability
+const DistanceLines = React.memo(({ propertyDistances, rulerActive }: { propertyDistances: any[], rulerActive: boolean }) => {
+  if (rulerActive) return null;
+  
+  const validDistances = propertyDistances.filter(({ property, substation }) => 
+    Array.isArray(property.coordinates) && property.coordinates.length >= 2 && 
+    Array.isArray(substation.coordinates) && substation.coordinates.length >= 2 &&
+    !isNaN(property.coordinates[0]) && !isNaN(substation.coordinates[0])
+  );
+
+  return (
+    <>
+      {validDistances.map(({ property, substation }) => (
+        <Polyline 
+          key={`poly-line-${property.id}`}
+          positions={[property.coordinates as [number, number], substation.coordinates as [number, number]]} 
+          color="#8b5cf6" 
+          weight={2.5} 
+          dashArray="10, 15" 
+          opacity={0.85}
+          smoothFactor={2}
+          interactive={false}
+          pathOptions={{
+            className: `property-dist-line-${property.id}`,
+            pane: 'overlayPane'
+          }}
+        />
+      ))}
+    </>
+  );
+});
+
+const createColoredIcon = (color: string, isSelected: boolean = false, label?: string, distanceLabel?: string, priceLabel?: string, propertyId?: string, substationId?: string) => {
+  const width = isSelected ? 28 : 20;
   const height = width * 1.4;
   
   return L.divIcon({
     className: 'custom-div-icon',
     html: `
-      <div class="relative flex flex-col items-center">
+      <div class="relative flex flex-col items-center" 
+        ${propertyId ? `data-property-id="${propertyId}"` : ''} 
+        ${substationId ? `data-substation-id="${substationId}"` : ''}
+      >
         <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-lg">
           <path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 34 12 34C12 34 24 21 24 12C24 5.37 18.63 0 12 0Z" fill="${color}" stroke="white" stroke-width="1.5"/>
           <circle cx="12" cy="12" r="3.5" fill="white" opacity="0.9"/>
         </svg>
-        <div class="mt-1 flex flex-col items-center gap-0.5 pointer-events-none">
+        <div class="mt-0.5 flex flex-col items-center gap-0.5 pointer-events-none">
           ${label ? `
-            <div style="background-color: ${color}" class="px-2 py-0.5 rounded shadow-sm border border-white/20">
-                <span class="text-[9px] font-bold uppercase text-white whitespace-nowrap">${label}</span>
+            <div class="px-1 py-0 select-none">
+                <span class="text-[7px] font-bold uppercase whitespace-nowrap leading-none drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]" style="color: ${color}">${label}</span>
             </div>
           ` : ''}
-          ${distanceLabel ? `
-            <div class="bg-violet-600 px-1.5 py-0.5 rounded shadow-sm border border-white/10">
-                <span class="text-[8px] font-black italic text-white whitespace-nowrap">${distanceLabel}</span>
-            </div>
-          ` : ''}
+          <div class="flex flex-row gap-0.5">
+            ${distanceLabel ? `
+              <div class="px-1 py-0 select-none">
+                  <span class="text-[7px] font-black italic text-violet-700 whitespace-nowrap leading-none drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]">${distanceLabel}</span>
+              </div>
+            ` : ''}
+            ${priceLabel ? `
+              <div class="px-1 py-0 select-none">
+                  <span class="text-[7px] font-bold text-emerald-700 whitespace-nowrap leading-none drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]">${priceLabel}</span>
+              </div>
+            ` : ''}
+          </div>
         </div>
       </div>
     `,
@@ -146,7 +194,7 @@ const SubstationLayerGroup = React.memo(({ substations, onSelect, selectedId }: 
         <Marker
           key={`${substation.id}-${substation.coordinates[0]}-${substation.coordinates[1]}`}
           position={substation.coordinates}
-          icon={createColoredIcon(SUBSTATION_COLOR, selectedId === substation.id, substation.name)}
+          icon={createColoredIcon(SUBSTATION_COLOR, selectedId === substation.id, substation.name, undefined, undefined, undefined, substation.id)}
           zIndexOffset={selectedId === substation.id ? 1000 : 0}
           eventHandlers={{
             click: () => onSelect?.(substation),
@@ -169,15 +217,23 @@ const SubstationLayerGroup = React.memo(({ substations, onSelect, selectedId }: 
 });
 
 // Component to handle map movements when selected property changes
-function MapController({ center, rulerActive }: { center: [number, number], rulerActive: boolean }) {
+function MapController({ center, rulerActive }: { center: [number, number] | null, rulerActive: boolean }) {
   const map = useMap();
+  const lastCenterRef = React.useRef<[number, number] | null>(null);
   
   useEffect(() => {
     if (center && !rulerActive && !isNaN(center[0]) && !isNaN(center[1])) {
-      map.flyTo(center, 15, {
-        duration: 0.8,
-        easeLinearity: 0.5
-      });
+      // Only fly if the center actually changed significantly
+      if (!lastCenterRef.current || 
+          lastCenterRef.current[0] !== center[0] || 
+          lastCenterRef.current[1] !== center[1]) {
+        
+        map.flyTo(center, 17, {
+          duration: 1.2,
+          easeLinearity: 0.25
+        });
+        lastCenterRef.current = center;
+      }
     }
   }, [center, map, rulerActive]);
   
@@ -202,6 +258,9 @@ export default function MapComponent({
   const [showBoundaries, setShowBoundaries] = useState(true);
   const [showStructures, setShowStructures] = useState(false);
   const [mapType, setMapType] = useState<'street' | 'satellite'>('street');
+  const [isSelectingForExport, setIsSelectingForExport] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const mapRef = React.useRef<HTMLDivElement>(null);
 
   // Improved performance: pre-calculate closest substation for all properties
   const propertyDistances = React.useMemo(() => {
@@ -277,36 +336,27 @@ export default function MapComponent({
       },
       zoomend() {},
     });
-    useEffect(() => {
-      if (selectedProperty && Array.isArray(selectedProperty.coordinates)) {
-        map.setView(selectedProperty.coordinates as [number, number], 17);
-      }
-    }, [selectedProperty, map]);
 
     return null;
   };
 
   // Determine stable coordinates for map centering
-  const stableCenter = React.useMemo(() => {
-    const defaultCenter: [number, number] = [-26.1311, 28.0536];
-    
+  const targetCenter = React.useMemo(() => {
     if (selectedProperty && Array.isArray(selectedProperty.coordinates) && !isNaN(selectedProperty.coordinates[0])) {
-      return selectedProperty.coordinates;
+      return selectedProperty.coordinates as [number, number];
     }
     if (selectedSubstation && Array.isArray(selectedSubstation.coordinates) && !isNaN(selectedSubstation.coordinates[0])) {
-      return selectedSubstation.coordinates;
+      return selectedSubstation.coordinates as [number, number];
     }
-    
-    // Default to first property if available and valid
-    if (properties.length > 0) {
-      const first = properties[0];
-      if (Array.isArray(first.coordinates) && !isNaN(first.coordinates[0])) {
-        return first.coordinates;
-      }
-    }
-    
-    return defaultCenter;
-  }, [selectedProperty, selectedSubstation, properties]);
+    return null;
+  }, [selectedProperty, selectedSubstation]);
+
+  // Initial center should only be computed once to prevent jumping on data updates
+  const [initialCenter] = useState<[number, number]>(() => {
+    if (selectedProperty) return selectedProperty.coordinates as [number, number];
+    if (properties.length > 0 && properties[0].coordinates) return properties[0].coordinates as [number, number];
+    return [-26.1311, 28.0536];
+  });
 
   useEffect(() => {
     if (!rulerActive) {
@@ -315,25 +365,346 @@ export default function MapComponent({
     }
   }, [rulerActive]);
 
+  const handleExportToPDF = async (selectedProperties: Property[]) => {
+    if (!mapRef.current) return;
+    
+    setIsExporting(true);
+    try {
+      // Small delay to ensure map markers and tiles are fully settled
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Target the actual leaflet container for better isolation
+      const container = mapRef.current?.querySelector('.leaflet-container') as HTMLElement;
+      if (!container) {
+        throw new Error("Leaflet map container not found");
+      }
+
+      let imgData: string | null = null;
+      let imgAspectRatio = 1;
+      
+      try {
+        const canvas = await html2canvas(container, {
+          useCORS: true,
+          logging: false,
+          scale: 2.5, // High scale for resolution
+          backgroundColor: '#ffffff',
+          allowTaint: false,
+          imageTimeout: 15000,
+          removeContainer: true,
+          onclone: (clonedDoc) => {
+            // Aggressively clean modern color functions that html2canvas can't parse
+            const styleTags = clonedDoc.getElementsByTagName('style');
+            const MODERN_COLOR_REGEX = /(oklch|oklab|color-mix)\([^)]+\)/g;
+            const FALLBACK_COLOR = '#6366f1';
+
+            for (let i = 0; i < styleTags.length; i++) {
+              const style = styleTags[i];
+              if (style.textContent && (style.textContent.includes('oklch') || style.textContent.includes('oklab') || style.textContent.includes('color-mix'))) {
+                style.textContent = style.textContent.replace(MODERN_COLOR_REGEX, FALLBACK_COLOR);
+              }
+            }
+            
+            const allElements = clonedDoc.querySelectorAll('*');
+            allElements.forEach((el) => {
+              const htmlEl = el as HTMLElement;
+              // Check SVG and direct attributes
+              ['fill', 'stroke', 'color', 'style'].forEach(attr => {
+                const val = htmlEl.getAttribute(attr);
+                if (val && (val.includes('oklch') || val.includes('oklab') || val.includes('color-mix'))) {
+                  htmlEl.setAttribute(attr, val.replace(MODERN_COLOR_REGEX, FALLBACK_COLOR));
+                }
+              });
+              
+              // Force-fix inline styles
+              if (htmlEl.style) {
+                ['color', 'backgroundColor', 'borderColor', 'fill', 'stroke'].forEach(prop => {
+                  try {
+                    const val = htmlEl.style.getPropertyValue(prop);
+                    if (val && (val.includes('oklch') || val.includes('oklab') || val.includes('color-mix'))) {
+                      htmlEl.style.setProperty(prop, FALLBACK_COLOR, 'important');
+                    }
+                  } catch (e) {}
+                });
+              }
+            });
+          },
+          ignoreElements: (element) => {
+            // Only export map with selected properties and their nearest substations
+            const selectedIds = selectedProperties.map(p => p.id);
+            const neededSubstationIds = propertyDistances
+              .filter(pd => selectedIds.includes(pd.property.id))
+              .map(pd => pd.substation.id);
+
+            // Leaflet markers check
+            if (element.classList.contains('leaflet-marker-icon')) {
+              const propId = element.querySelector('[data-property-id]')?.getAttribute('data-property-id');
+              const subId = element.querySelector('[data-substation-id]')?.getAttribute('data-substation-id');
+              
+              if (propId && !selectedIds.includes(propId)) return true;
+              if (subId && !neededSubstationIds.includes(subId)) return true;
+            }
+
+            // Distance labels check (divIcons can also have these)
+            const propertyId = element.getAttribute('data-property-id');
+            if (propertyId && !selectedIds.includes(propertyId)) {
+              return true;
+            }
+
+            // Filter distance lines (SVG paths)
+            const isDistLine = Array.from(element.classList).some(cls => cls.startsWith('property-dist-line-'));
+            if (isDistLine) {
+              const linePropId = Array.from(element.classList).find(cls => cls.startsWith('property-dist-line-'))?.replace('property-dist-line-', '');
+              if (linePropId && !selectedIds.includes(linePropId)) {
+                return true;
+              }
+            }
+
+            return (
+              element.hasAttribute('data-html2canvas-ignore') || 
+              element.classList.contains('leaflet-control-container')
+            );
+          }
+        });
+        
+        imgAspectRatio = canvas.height / canvas.width;
+        imgData = canvas.toDataURL('image/png', 1.0);
+      } catch (canvasError) {
+        console.warn('Map capture failed, proceeding with data-only report', canvasError);
+      }
+      const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'mm',
+        format: 'a4',
+        compress: true
+      });
+      
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      
+      // Header
+      pdf.setFillColor(15, 23, 42); 
+      pdf.rect(0, 0, pageWidth, 40, 'F');
+      
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(22);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('SPATIAL ANALYSIS REPORT', 15, 20);
+      
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(`Generated on ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, 15, 30);
+      pdf.text(`Total Properties: ${selectedProperties.length}`, 15, 35);
+
+      let currentY = 50;
+      
+      // Map Section (Only if we have the image)
+      if (imgData) {
+        pdf.setTextColor(15, 23, 42);
+        pdf.setFontSize(14);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Map Overview', 15, currentY);
+        
+        const imgWidth = pageWidth - 20;
+        const imgHeight = imgWidth * imgAspectRatio; // Dynamic height based on ratio
+        
+        pdf.setDrawColor(226, 232, 240);
+        pdf.rect(9.5, currentY + 4.5, imgWidth + 1, imgHeight + 1, 'S');
+        pdf.addImage(imgData, 'PNG', 10, currentY + 5, imgWidth, imgHeight);
+        
+        currentY += imgHeight + 20;
+      } else {
+        pdf.setTextColor(100, 116, 139);
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'italic');
+        pdf.text('Map visualization currently unavailable. Textual report follows.', 15, currentY);
+        currentY += 15;
+      }
+
+      // Properties Details
+      currentY += 8;
+
+      selectedProperties.forEach((prop, index) => {
+        if (currentY > pageHeight - 50) {
+          pdf.addPage();
+          currentY = 20;
+        }
+
+        pdf.setFillColor(248, 250, 252);
+        pdf.roundedRect(10, currentY, pageWidth - 20, 35, 2, 2, 'F');
+        
+        pdf.setTextColor(15, 23, 42);
+        pdf.setFontSize(11);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(`${index + 1}. ${prop.name}`, 15, currentY + 10);
+        
+        pdf.setFontSize(9);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(100, 116, 139);
+        pdf.text(`${prop.address.street}, ${prop.address.suburb}`, 15, currentY + 17);
+        
+        pdf.setTextColor(79, 70, 229);
+        pdf.text(`Type: ${prop.type}`, 15, currentY + 25);
+        
+        const distInfo = propertyDistances.find(pd => pd.property.id === prop.id);
+        if (distInfo) {
+          pdf.text(`Distance: ${(distInfo.distance / 1000).toFixed(2)}km`, 80, currentY + 25);
+          pdf.text(`Substation: ${distInfo.substation.name}`, 80, currentY + 30);
+        }
+
+        if (prop.financials?.purchasePrice) {
+          pdf.setTextColor(5, 150, 105);
+          pdf.text(`Price: R ${prop.financials.purchasePrice.toLocaleString()}`, 140, currentY + 25);
+        }
+
+        currentY += 40;
+      });
+
+      const fileName = `spatial_report_${Date.now()}.pdf`;
+      
+      // Use standard save as primary
+      pdf.save(fileName);
+      
+      setIsSelectingForExport(false);
+    } catch (error) {
+      console.error('PDF Export Error:', error);
+      alert('Generating PDF failed. This might be due to map tile access restrictions. Try again or check your connection.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportAsImage = async (selectedProperties: Property[]) => {
+    if (!mapRef.current) return;
+    
+    setIsExporting(true);
+    try {
+      // Small delay to ensure map markers and tiles are fully settled
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const container = mapRef.current?.querySelector('.leaflet-container') as HTMLElement;
+      if (!container) {
+        throw new Error("Leaflet map container not found");
+      }
+
+      const canvas = await html2canvas(container, {
+        useCORS: true,
+        logging: false,
+        scale: 3, // Increased scale for ultra-high resolution images
+        backgroundColor: '#ffffff',
+        allowTaint: false,
+        imageTimeout: 15000,
+        removeContainer: true,
+        onclone: (clonedDoc) => {
+          // Clean style blocks of any modern color functions that break capture
+          const MODERN_COLOR_REGEX = /(oklch|oklab|color-mix)\([^)]+\)/g;
+          const FALLBACK_COLOR = '#6366f1';
+
+          const styleTags = clonedDoc.getElementsByTagName('style');
+          for (let i = 0; i < styleTags.length; i++) {
+            const style = styleTags[i];
+            if (style.textContent && (style.textContent.includes('oklch') || style.textContent.includes('oklab') || style.textContent.includes('color-mix'))) {
+              style.textContent = style.textContent.replace(MODERN_COLOR_REGEX, FALLBACK_COLOR);
+            }
+          }
+          
+          const allElements = clonedDoc.querySelectorAll('*');
+          allElements.forEach((el) => {
+            const htmlEl = el as HTMLElement;
+            ['fill', 'stroke', 'color', 'style'].forEach(attr => {
+              const val = htmlEl.getAttribute(attr);
+              if (val && (val.includes('oklch') || val.includes('oklab') || val.includes('color-mix'))) {
+                htmlEl.setAttribute(attr, val.replace(MODERN_COLOR_REGEX, FALLBACK_COLOR));
+              }
+            });
+            
+            if (htmlEl.style) {
+              ['color', 'backgroundColor', 'borderColor', 'fill', 'stroke'].forEach(prop => {
+                try {
+                  const val = htmlEl.style.getPropertyValue(prop);
+                  if (val && (val.includes('oklch') || val.includes('oklab') || val.includes('color-mix'))) {
+                    htmlEl.style.setProperty(prop, FALLBACK_COLOR, 'important');
+                  }
+                } catch (e) {}
+              });
+            }
+          });
+        },
+        ignoreElements: (element) => {
+          // Filter selected properties and their nearest substations for image too
+          const selectedIds = selectedProperties.map(p => p.id);
+          const neededSubstationIds = propertyDistances
+            .filter(pd => selectedIds.includes(pd.property.id))
+            .map(pd => pd.substation.id);
+
+          // Leaflet markers check
+          if (element.classList.contains('leaflet-marker-icon')) {
+            const propId = element.querySelector('[data-property-id]')?.getAttribute('data-property-id');
+            const subId = element.querySelector('[data-substation-id]')?.getAttribute('data-substation-id');
+            
+            if (propId && !selectedIds.includes(propId)) return true;
+            if (subId && !neededSubstationIds.includes(subId)) return true;
+          }
+
+          // Distance labels check
+          const propertyId = element.getAttribute('data-property-id');
+          if (propertyId && !selectedIds.includes(propertyId)) {
+            return true;
+          }
+
+          // Filter distance lines
+          const isDistLine = Array.from(element.classList).some(cls => cls.startsWith('property-dist-line-'));
+          if (isDistLine) {
+            const linePropId = Array.from(element.classList).find(cls => cls.startsWith('property-dist-line-'))?.replace('property-dist-line-', '');
+            if (linePropId && !selectedIds.includes(linePropId)) {
+              return true;
+            }
+          }
+
+          return (
+            element.hasAttribute('data-html2canvas-ignore') || 
+            element.classList.contains('leaflet-control-container')
+          );
+        }
+      });
+
+      const imgData = canvas.toDataURL('image/png', 1.0);
+      const link = document.createElement('a');
+      link.download = `spatial_snapshot_${Date.now()}.png`;
+      link.href = imgData;
+      link.click();
+      
+      setIsSelectingForExport(false);
+    } catch (error) {
+      console.error('Image Export Error:', error);
+      alert('Generating image failed. This might be due to map tile access restrictions.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
-    <div className={cn(
+    <div 
+      ref={mapRef}
+      className={cn(
       "relative rounded-xl overflow-hidden border border-slate-200 shadow-sm transition-all duration-500 ease-in-out",
       isFullscreen ? "fixed inset-0 z-[5000] rounded-none border-none" : "w-full h-full"
     )}>
       <MapContainer 
-        center={stableCenter} 
+        center={initialCenter} 
         zoom={13} 
         zoomSnap={0.25}
         zoomDelta={0.25}
         wheelPxPerZoomLevel={120}
         style={{ height: '100%', width: '100%' }} 
         zoomControl={false}
+        preferCanvas={true}
       >
         <LayersControl position="topright">
           <LayersControl.BaseLayer checked={mapType === 'street'} name="Street View">
             <TileLayer
               url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
               attribution='&copy; CARTO'
+              crossOrigin="anonymous"
             />
           </LayersControl.BaseLayer>
           
@@ -341,6 +712,7 @@ export default function MapComponent({
             <TileLayer
               url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
               attribution='&copy; Esri'
+              crossOrigin="anonymous"
             />
           </LayersControl.BaseLayer>
 
@@ -367,21 +739,24 @@ export default function MapComponent({
           visible={showStructures}
         />
 
-        <MapController center={stableCenter} rulerActive={rulerActive} />
+        <MapController center={targetCenter} rulerActive={rulerActive} />
 
         {React.useMemo(() => properties.filter(p => Array.isArray(p.coordinates) && p.coordinates.length >= 2 && !isNaN(p.coordinates[0])).map(property => {
           const distInfo = propertyDistances.find(pd => pd.property.id === property.id);
           const distanceLabel = distInfo ? `${(distInfo.distance / 1000).toFixed(2)}km` : undefined;
+          const priceLabel = property.financials?.purchasePrice ? `R ${(property.financials.purchasePrice / 1000000).toFixed(1)}M` : undefined;
           
           return (
             <Marker
               key={`${property.id}-${property.coordinates[0]}-${property.coordinates[1]}`}
               position={property.coordinates as [number, number]}
               icon={createColoredIcon(
-                (PROPERTY_TYPE_COLORS[property.type as keyof typeof PROPERTY_TYPE_COLORS]) || '#64748b',
+                CLASSIC_RED,
                 selectedProperty?.id === property.id,
                 property.name,
-                distanceLabel
+                distanceLabel,
+                priceLabel,
+                property.id
               )}
               zIndexOffset={selectedProperty?.id === property.id ? 1000 : 0}
               eventHandlers={{ click: () => onSelectProperty(property) }}
@@ -443,22 +818,12 @@ export default function MapComponent({
           </>
         )}
 
-        {!rulerActive && propertyDistances.map(({ property, substation }) => (
-          <React.Fragment key={`dist-group-${property.id}`}>
-            <Polyline 
-              positions={[property.coordinates, substation.coordinates]} 
-              color="#8b5cf6" 
-              weight={1.5} 
-              dashArray="5, 8" 
-              opacity={selectedProperty?.id === property.id ? 0.9 : 0.5}
-            />
-          </React.Fragment>
-        ))}
+        <DistanceLines propertyDistances={propertyDistances} rulerActive={rulerActive} />
 
         <MapEvents />
       </MapContainer>
 
-      <div className="absolute top-4 left-4 z-[1000] flex flex-col gap-2">
+      <div className="absolute top-4 left-4 z-[1000] flex flex-col gap-2" data-html2canvas-ignore="true">
         <button
           onClick={() => setMapType(mapType === 'street' ? 'satellite' : 'street')}
           className={cn(
@@ -510,22 +875,47 @@ export default function MapComponent({
         >
           {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
         </button>
+
+        <button
+          onClick={() => setIsSelectingForExport(!isSelectingForExport)}
+          className={cn(
+            "p-3 rounded-xl shadow-xl transition-all border",
+            isSelectingForExport ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+          )}
+          title="Map Report & Export"
+        >
+          <FileDown className="w-4 h-4" />
+        </button>
       </div>
 
-      {isFullscreen && (
-        <MapDetailsOverlay 
-          property={selectedProperty}
-          substation={selectedSubstation}
-          closestSubstationInfo={propertyDistances.find(pd => pd.property.id === selectedProperty?.id)}
-          isFullscreen={isFullscreen}
-          onCloseProperty={() => onSelectProperty(null as any)}
-          onCloseSubstation={() => onSelectSubstation?.(null as any)}
-          onOpenDetails={onOpenDetails!}
+      {isSelectingForExport && (
+        <ExportSelectionOverlay 
+          properties={properties}
+          onClose={() => setIsSelectingForExport(false)}
+          onExport={handleExportToPDF}
+          onExportImage={handleExportAsImage}
+          isExporting={isExporting}
         />
       )}
 
+      {isFullscreen && (
+          <MapDetailsOverlay 
+            property={selectedProperty}
+            substation={selectedSubstation}
+            closestSubstationInfo={propertyDistances.find(pd => pd.property.id === selectedProperty?.id)}
+            isFullscreen={isFullscreen}
+            onCloseProperty={() => onSelectProperty(null as any)}
+            onCloseSubstation={() => onSelectSubstation?.(null as any)}
+            onOpenDetails={onOpenDetails!}
+            data-html2canvas-ignore="true"
+          />
+      )}
+
       {rulerActive && distance !== null && (
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[1000] bg-slate-900/90 backdrop-blur-md text-white px-6 py-4 rounded-3xl shadow-2xl border border-white/10 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-5 duration-300">
+        <div 
+          className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[1000] bg-slate-900/90 backdrop-blur-md text-white px-6 py-4 rounded-3xl shadow-2xl border border-white/10 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-5 duration-300"
+          data-html2canvas-ignore="true"
+        >
            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/40">
               <Scaling className="w-5 h-5 text-white" />
            </div>

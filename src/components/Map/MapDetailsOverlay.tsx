@@ -11,6 +11,7 @@ interface MapDetailsOverlayProps {
   onCloseProperty: () => void;
   onCloseSubstation: () => void;
   onOpenDetails: (property: Property) => void;
+  'data-html2canvas-ignore'?: string;
 }
 
 export default function MapDetailsOverlay({
@@ -20,16 +21,20 @@ export default function MapDetailsOverlay({
   isFullscreen,
   onCloseProperty,
   onCloseSubstation,
-  onOpenDetails
+  onOpenDetails,
+  ...props
 }: MapDetailsOverlayProps) {
   if (!property && !substation) return null;
 
   if (property) {
     return (
-      <div className={cn(
-        "absolute top-4 right-4 z-[1000] transition-all duration-300",
-        isFullscreen ? "w-80 md:w-96" : "w-72"
-      )}>
+      <div 
+        className={cn(
+          "absolute top-4 right-4 z-[1000] transition-all duration-300",
+          isFullscreen ? "w-80 md:w-96" : "w-72"
+        )}
+        {...props}
+      >
         <div className="bg-white overflow-hidden rounded-xl shadow-xl border border-slate-200">
           <div className="p-4 border-b border-slate-100 flex justify-between items-center">
             <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded">
@@ -46,17 +51,31 @@ export default function MapDetailsOverlay({
               {property.address.street}, {property.address.suburb}
             </p>
             
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Valuation</p>
-                <p className="text-sm font-bold text-slate-900">R {property.financials.purchasePrice.toLocaleString()}</p>
+            <div className="space-y-4 mb-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Valuation</p>
+                  <p className="text-sm font-bold text-slate-900">R {property.financials.purchasePrice.toLocaleString()}</p>
+                </div>
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Grid Distance</p>
+                  <p className="text-sm font-bold text-indigo-600">
+                    {closestSubstationInfo ? `${(closestSubstationInfo.distance / 1000).toFixed(2)}km` : 'N/A'}
+                  </p>
+                </div>
               </div>
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Grid Distance</p>
-                <p className="text-sm font-bold text-indigo-600">
-                  {closestSubstationInfo ? `${(closestSubstationInfo.distance / 1000).toFixed(2)}km` : 'N/A'}
-                </p>
-              </div>
+              
+              {closestSubstationInfo && (
+                <div className="bg-violet-50/50 p-4 rounded-xl border border-violet-100">
+                  <p className="text-[9px] font-bold text-violet-400 uppercase tracking-widest mb-1">Infrastructure Proximity</p>
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-3.5 h-3.5 text-violet-600" />
+                    <p className="text-sm font-bold text-slate-900 truncate">
+                      {closestSubstationInfo.substation.name}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <button 
@@ -73,11 +92,14 @@ export default function MapDetailsOverlay({
 
   if (substation) {
     return (
-      <div className={cn(
-        "absolute top-4 right-4 z-[1000] transition-all transform",
-        substation ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0 pointer-events-none",
-        isFullscreen ? "w-72" : "w-64"
-      )}>
+      <div 
+        className={cn(
+          "absolute top-4 right-4 z-[1000] transition-all transform",
+          substation ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0 pointer-events-none",
+          isFullscreen ? "w-72" : "w-64"
+        )}
+        {...props}
+      >
         <div className="bg-white overflow-hidden rounded-2xl shadow-2xl border border-slate-200">
           <div className="p-3 bg-violet-50 border-b border-violet-100 flex justify-between items-center">
             <div className="flex items-center gap-2">

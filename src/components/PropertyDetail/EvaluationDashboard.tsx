@@ -75,6 +75,9 @@ export default function EvaluationDashboard({
       if (path === 'description') return { ...prev, [path]: value };
       if (path === 'agent') return { ...prev, [path]: value };
       if (path === 'listingNumber') return { ...prev, [path]: value };
+      if (path === 'googleMapsUrl') return { ...prev, [path]: value };
+      if (path === 'p24Url') return { ...prev, [path]: value };
+      if (path === 'agentPhone') return { ...prev, [path]: value };
       
       const parts = path.split('.');
       if (parts.length === 2) {
@@ -105,7 +108,7 @@ export default function EvaluationDashboard({
     setIsEditing(false);
   };
 
-  const { name, type, listingNumber, p24Url, agent, description } = isEditing ? editedProperty : property;
+  const { name, type, listingNumber, p24Url, agent, agentPhone, description } = isEditing ? editedProperty : property;
 
   return (
     <div className="bg-white h-full overflow-y-auto custom-scrollbar">
@@ -115,7 +118,14 @@ export default function EvaluationDashboard({
            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
               <div className="flex items-center gap-3">
                  <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2 py-1 rounded">{type}</span>
-                 {onRefineProperty && !isEditing && (
+                 {isEditing ? (
+                    <input 
+                      value={p24Url || ''}
+                      onChange={(e) => handleFieldUpdate('p24Url', e.target.value)}
+                      className="text-[10px] text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-200 outline-none w-48"
+                      placeholder="Property24 Link"
+                    />
+                 ) : onRefineProperty && (
                     <button 
                       onClick={() => onRefineProperty(property)}
                       className="text-[10px] font-bold text-slate-400 hover:text-indigo-600 transition-colors uppercase tracking-widest"
@@ -248,14 +258,25 @@ export default function EvaluationDashboard({
                  </div>
                  <div>
                     {isEditing ? (
-                       <input 
-                          value={agent || ''}
-                          onChange={(e) => handleFieldUpdate('agent', e.target.value)}
-                          className="bg-white border border-slate-200 rounded px-2 py-0.5 text-xs font-bold outline-none"
-                          placeholder="Agent Name"
-                       />
+                       <div className="flex flex-col gap-2">
+                         <input 
+                            value={agent || ''}
+                            onChange={(e) => handleFieldUpdate('agent', e.target.value)}
+                            className="bg-white border border-slate-200 rounded px-2 py-0.5 text-xs font-bold outline-none"
+                            placeholder="Agent Name"
+                         />
+                         <input 
+                            value={agentPhone || ''}
+                            onChange={(e) => handleFieldUpdate('agentPhone', e.target.value)}
+                            className="bg-white border border-slate-200 rounded px-2 py-0.5 text-[10px] outline-none"
+                            placeholder="Phone Number"
+                         />
+                       </div>
                     ) : (
-                       <p className="font-bold text-slate-900">{agent || 'Generic Agent'}</p>
+                       <>
+                         <p className="font-bold text-slate-900">{agent || 'Generic Agent'}</p>
+                         {agentPhone && <p className="text-[10px] text-slate-400 font-medium">{agentPhone}</p>}
+                       </>
                     )}
                     <p className="text-[10px] text-slate-500 font-medium">Real Estate Professional</p>
                  </div>

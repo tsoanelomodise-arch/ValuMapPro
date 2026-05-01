@@ -5,6 +5,8 @@ import { MapPin, Ruler, Scaling, ArrowUpRight, Trash2, Edit3 } from 'lucide-reac
 
 interface ListViewProps {
   properties: Property[];
+  visiblePropertyIds: string[];
+  onToggleVisibility: (id: string) => void;
   onSelectProperty: (property: Property) => void;
   onOpenDetails: (property: Property) => void;
   onEditProperty?: (property: Property) => void;
@@ -12,7 +14,16 @@ interface ListViewProps {
   onDeleteProperty?: (id: string) => void;
 }
 
-export default function ListView({ properties, onSelectProperty, onOpenDetails, onEditProperty, selectedProperty, onDeleteProperty }: ListViewProps) {
+export default function ListView({ 
+  properties, 
+  visiblePropertyIds,
+  onToggleVisibility,
+  onSelectProperty, 
+  onOpenDetails, 
+  onEditProperty, 
+  selectedProperty, 
+  onDeleteProperty 
+}: ListViewProps) {
   return (
     <div className="flex flex-col h-full gap-4">
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex-1">
@@ -20,6 +31,9 @@ export default function ListView({ properties, onSelectProperty, onOpenDetails, 
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
+                <th className="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-center w-10">
+                  Visible
+                </th>
                 <th className="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Property</th>
                 <th className="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-center">Zoning</th>
                 <th className="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-center">Erf Size</th>
@@ -30,7 +44,7 @@ export default function ListView({ properties, onSelectProperty, onOpenDetails, 
             <tbody className="divide-y divide-slate-50">
               {properties.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-slate-400 text-xs font-medium">
+                  <td colSpan={6} className="px-6 py-12 text-center text-slate-400 text-xs font-medium">
                     No results found in current index.
                   </td>
                 </tr>
@@ -38,11 +52,23 @@ export default function ListView({ properties, onSelectProperty, onOpenDetails, 
                 properties.map((property) => (
                   <tr 
                     key={property.id} 
-                    className={`hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50 ${selectedProperty?.id === property.id ? 'bg-indigo-50/50' : ''}`}
+                    className={`hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50 ${selectedProperty?.id === property.id ? 'bg-indigo-50/50' : ''} ${!visiblePropertyIds.includes(property.id) ? 'opacity-60 grayscale-[0.5]' : ''}`}
                     onClick={() => onSelectProperty(property)}
                   >
+                    <td className="px-6 py-5 text-center" onClick={(e) => e.stopPropagation()}>
+                      <input 
+                        type="checkbox"
+                        checked={visiblePropertyIds.includes(property.id)}
+                        onChange={() => onToggleVisibility(property.id)}
+                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer mx-auto"
+                      />
+                    </td>
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-3">
+                        <div 
+                          className="w-1 h-10 rounded-full" 
+                          style={{ backgroundColor: PROPERTY_TYPE_COLORS[property.type as keyof typeof PROPERTY_TYPE_COLORS] }}
+                        />
                         <div className="w-10 h-10 bg-slate-50 rounded-lg flex items-center justify-center shrink-0 border border-slate-100">
                           <MapPin className="w-4 h-4 text-slate-400" />
                         </div>

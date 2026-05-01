@@ -103,6 +103,13 @@ export default function App() {
   const [pendingSubstation, setPendingSubstation] = useState<Substation | null>(null);
   const [isRulerActive, setIsRulerActive] = useState(false);
   const [isEditingRequested, setIsEditingRequested] = useState(false);
+  const [visiblePropertyIds, setVisiblePropertyIds] = usePersistedState<string[]>('propscope_visible_properties', () => properties.map(p => p.id));
+
+  const togglePropertyVisibility = (id: string) => {
+    setVisiblePropertyIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
 
   const handleSelectProperty = (property: Property) => {
     setSelectedProperty(property);
@@ -406,6 +413,8 @@ export default function App() {
                        substations={filteredSubstations}
                        selectedPropertyId={selectedProperty?.id}
                        selectedSubstationId={selectedSubstation?.id}
+                       visiblePropertyIds={visiblePropertyIds}
+                       onToggleVisibility={togglePropertyVisibility}
                        onSelectProperty={handleSelectProperty}
                        onOpenDetails={handleOpenDetails}
                        onSelectSubstation={(s) => {
@@ -419,7 +428,7 @@ export default function App() {
                       onClick={(e) => e.stopPropagation()}
                     >
                       <MapComponent 
-                         properties={filteredProperties} 
+                         properties={filteredProperties.filter(p => visiblePropertyIds.includes(p.id))} 
                          substations={filteredSubstations}
                          onSelectProperty={handleSelectProperty} 
                          selectedProperty={selectedProperty}
@@ -441,6 +450,8 @@ export default function App() {
                     {activeCategory === 'properties' ? (
                       <ListView 
                          properties={filteredProperties} 
+                         visiblePropertyIds={visiblePropertyIds}
+                         onToggleVisibility={togglePropertyVisibility}
                          onSelectProperty={handleSelectProperty}
                          onOpenDetails={handleOpenDetails}
                          onEditProperty={(p) => {

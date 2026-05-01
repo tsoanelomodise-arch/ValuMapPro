@@ -5,6 +5,7 @@ export interface Property {
   listingNumber?: string;
   p24Url?: string;
   agent?: string;
+  agentPhone?: string;
   description?: string;
   googleMapsUrl?: string;
   name: string;
