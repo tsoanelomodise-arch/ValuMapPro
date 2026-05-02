@@ -105,10 +105,10 @@ export default function MapDetailsOverlay({
                       <div className="flex flex-wrap gap-x-2 gap-y-0.5">
                         <span className="font-bold text-slate-500 uppercase tracking-tighter text-[9px]">P24 Ref:</span>
                         <a 
-                          href={`https://www.property24.com/property-details/${property.listingNumber}`}
+                          href={property.p24Url || `https://www.property24.com/for-sale/${property.listingNumber}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-slate-900 font-bold hover:text-indigo-600 hover:underline cursor-pointer flex items-center gap-1"
+                          className="text-slate-900 font-bold hover:text-blue-600 hover:underline cursor-pointer flex items-center gap-1"
                           onClick={(e) => e.stopPropagation()}
                         >
                           {property.listingNumber}

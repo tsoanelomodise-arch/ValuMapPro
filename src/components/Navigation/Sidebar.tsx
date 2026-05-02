@@ -37,7 +37,7 @@ export function Sidebar({
       isOpen ? "w-64" : "w-20"
     )}>
       <div className="p-6 flex items-center gap-3">
-        <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/20">
+        <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/20">
           <Zap className="text-white w-6 h-6" />
         </div>
         {isOpen && (
@@ -116,7 +116,7 @@ function SidebarLink({ icon, label, onClick, active, isOpen }: {
       className={cn(
         "w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all relative group",
         active 
-          ? "bg-indigo-600 text-white" 
+          ? "bg-blue-600 text-white" 
           : "text-slate-400 hover:text-white hover:bg-white/5"
       )}
     >

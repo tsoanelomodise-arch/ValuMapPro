@@ -363,7 +363,7 @@ export default function App() {
 
   return (
     <div 
-      className="flex h-screen bg-slate-50 font-sans text-slate-700 overflow-hidden selection:bg-indigo-100 selection:text-indigo-900"
+      className="flex h-screen bg-slate-50 font-sans text-slate-700 overflow-hidden selection:bg-blue-100 selection:text-blue-900"
       onClick={() => {
         if (isRulerActive) setIsRulerActive(false);
       }}
@@ -544,7 +544,7 @@ export default function App() {
               <div className="flex justify-between items-start mb-8">
                 <div>
                   <div className="flex items-center gap-2 mb-1.5">
-                     <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full" />
+                     <span className="w-1.5 h-1.5 bg-blue-600 rounded-full" />
                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em]">External Data Link</span>
                   </div>
                   <h3 className="text-2xl font-semibold text-slate-900 tracking-tight">Import from Property24</h3>
@@ -576,7 +576,7 @@ export default function App() {
                     <input 
                       type="text" 
                       placeholder="e.g. 114455667"
-                      className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-600 focus:bg-white rounded-xl px-5 py-4 text-sm font-semibold outline-none transition-all placeholder:text-slate-300"
+                      className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-600 focus:bg-white rounded-xl px-5 py-4 text-sm font-semibold outline-none transition-all placeholder:text-slate-300"
                       value={listingNumber}
                       onChange={(e) => setListingNumber(e.target.value)}
                       disabled={isImporting}
@@ -616,7 +616,7 @@ export default function App() {
               <div className="flex justify-between items-start mb-8">
                 <div>
                   <div className="flex items-center gap-2 mb-1.5">
-                     <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full" />
+                     <span className="w-1.5 h-1.5 bg-blue-600 rounded-full" />
                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em]">Infrastructure Analysis</span>
                   </div>
                   <h3 className="text-2xl font-semibold text-slate-900 tracking-tight">Add Substation</h3>

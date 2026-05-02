@@ -189,9 +189,9 @@ export default function EvaluationDashboard({
              { label: 'Term', val: `${financials.termYears} Y`, path: 'financials.termYears', type: 'number', suffix: 'Y' },
              { label: 'Bond Amount', val: formatCurrency(financials.bondAmount), path: 'financials.bondAmount', type: 'currency' },
              { label: 'Deposit', val: formatCurrency(financials.deposit), path: 'financials.deposit', type: 'currency' },
-             { label: 'Ref Number', val: listingNumber || 'N/A', path: 'listingNumber', type: 'text' },
+             { label: 'Ref Number', val: listingNumber || 'N/A', path: 'listingNumber', type: 'text', isP24: true },
              { label: 'Title Type', val: specs.titleType, path: 'specs.titleType', type: 'text' },
-           ].map((item, i) => (
+           ].map((item: any, i) => (
               <div key={i} className="bg-white p-6">
                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{item.label}</p>
                  {isEditing ? (
@@ -204,7 +204,19 @@ export default function EvaluationDashboard({
                        />
                     </div>
                  ) : (
-                    <p className="text-lg font-bold text-slate-900">{item.val}</p>
+                    item.isP24 && listingNumber ? (
+                      <a 
+                        href={p24Url || `https://www.property24.com/for-sale/${listingNumber}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-lg font-bold text-blue-600 hover:underline flex items-center gap-1.5"
+                      >
+                        {item.val}
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    ) : (
+                      <p className="text-lg font-bold text-slate-900">{item.val}</p>
+                    )
                  )}
               </div>
            ))}

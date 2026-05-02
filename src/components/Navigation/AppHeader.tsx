@@ -25,7 +25,7 @@ export function AppHeader({ isSidebarOpen, toggleSidebar, searchQuery, setSearch
           <input 
             type="text" 
             placeholder="Search index..." 
-            className="w-full bg-slate-50 border border-slate-100 rounded-lg pl-9 pr-4 py-2 text-xs focus:ring-1 focus:ring-indigo-600/10 font-bold uppercase tracking-widest outline-none transition-all placeholder:text-slate-300"
+            className="w-full bg-slate-50 border border-slate-100 rounded-lg pl-9 pr-4 py-2 text-xs focus:ring-1 focus:ring-blue-600/10 font-bold uppercase tracking-widest outline-none transition-all placeholder:text-slate-300"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />

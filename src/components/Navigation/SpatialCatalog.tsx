@@ -96,13 +96,13 @@ export function SpatialCatalog({
                 className={cn(
                   "w-full text-left p-3 rounded-xl border flex items-start gap-3 group relative overflow-hidden",
                   selectedSubstationId === s.id 
-                    ? "bg-violet-50/50 border-violet-200 shadow-sm" 
+                    ? "bg-blue-50/50 border-blue-200 shadow-sm" 
                     : "bg-white border-transparent hover:bg-slate-50"
                 )}
               >
-                <div className="w-1 h-full absolute left-0 top-0 bg-violet-500 transition-opacity opacity-0 group-hover:opacity-100" />
-                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 group-hover:bg-violet-100 transition-colors">
-                   <Zap className={cn("w-4 h-4", selectedSubstationId === s.id ? "text-violet-600" : "text-slate-400")} />
+                <div className="w-1 h-full absolute left-0 top-0 bg-blue-500 transition-opacity opacity-0 group-hover:opacity-100" />
+                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition-colors">
+                   <Zap className={cn("w-4 h-4", selectedSubstationId === s.id ? "text-blue-600" : "text-slate-400")} />
                 </div>
                 <div className="flex-1 min-w-0">
                    <p className="text-[11px] font-black text-slate-800 uppercase tracking-tight truncate leading-none mb-1">{s.name}</p>
