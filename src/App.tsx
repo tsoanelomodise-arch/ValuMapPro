@@ -25,7 +25,6 @@ import {
   Zap
 } from 'lucide-react';
 import { searchSubstations, AISubstation } from './services/geminiService';
-import { GoogleGenAI, Type } from "@google/genai";
 import { cn } from './lib/utils';
 
 // Custom hook for local storage persistence
@@ -141,71 +140,66 @@ export default function App() {
       return;
     }
 
-    if (!process.env.GEMINI_API_KEY) {
-      alert("GEMINI_API_KEY is not configured. Please add it to your environment variables.");
-      return;
-    }
-
     setIsImporting(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Find the official Property24 listing for South African property with listing number: ${listingNumber}. 
-        Extract the information into the following JSON format. Use Google Search to find the EXACT GPS coordinates (Latitude, Longitude) for this property if possible.
-        If certain financial details are not available, estimate them based on standard SA market rates.`,
-        config: {
+      const response = await fetch("/api/ai/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: `Find the official Property24 listing for South African property with listing number: ${listingNumber}. 
+          Extract the information into the following JSON format. Use Google Search to find the EXACT GPS coordinates (Latitude, Longitude) for this property if possible.
+          If certain financial details are not available, estimate them based on standard SA market rates.`,
           tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
+          schema: {
+            type: "OBJECT",
             properties: {
-              name: { type: Type.STRING },
-              type: { type: Type.STRING, enum: ['Residential', 'Commercial', 'Industrial', 'Agricultural'], description: "Zoning and Classification can never be 'Vacant Land'. If the property is a vacant stand, classify it based on its primary zoning (Residential, Commercial, Industrial, or Agricultural)." },
-              description: { type: Type.STRING },
+              name: { type: "STRING" },
+              type: { type: "STRING", enum: ['Residential', 'Commercial', 'Industrial', 'Agricultural'] },
+              description: { type: "STRING" },
               address: {
-                type: Type.OBJECT,
+                type: "OBJECT",
                 properties: {
-                  street: { type: Type.STRING },
-                  suburb: { type: Type.STRING },
-                  city: { type: Type.STRING },
-                  province: { type: Type.STRING },
-                  country: { type: Type.STRING }
+                  street: { type: "STRING" },
+                  suburb: { type: "STRING" },
+                  city: { type: "STRING" },
+                  province: { type: "STRING" },
+                  country: { type: "STRING" }
                 },
                 required: ["street", "suburb", "city", "province", "country"]
               },
-              coordinates: { type: Type.ARRAY, items: { type: Type.NUMBER } },
+              coordinates: { type: "ARRAY", items: { type: "NUMBER" } },
               specs: {
-                type: Type.OBJECT,
+                type: "OBJECT",
                 properties: {
-                  standSize: { type: Type.NUMBER },
-                  titleType: { type: Type.STRING, enum: ['Sectional title', 'Full title'] }
+                  standSize: { type: "NUMBER" },
+                  titleType: { type: "STRING", enum: ['Sectional title', 'Full title'] }
                 },
                 required: ["standSize", "titleType"]
               },
               financials: {
-                type: Type.OBJECT,
+                type: "OBJECT",
                 properties: {
-                  purchasePrice: { type: Type.NUMBER },
-                  marketValue: { type: Type.NUMBER },
-                  bondAmount: { type: Type.NUMBER },
-                  deposit: { type: Type.NUMBER },
-                  interestRate: { type: Type.NUMBER },
-                  termYears: { type: Type.NUMBER }
+                  purchasePrice: { type: "NUMBER" },
+                  marketValue: { type: "NUMBER" },
+                  bondAmount: { type: "NUMBER" },
+                  deposit: { type: "NUMBER" },
+                  interestRate: { type: "NUMBER" },
+                  termYears: { type: "NUMBER" }
                 },
                 required: ["purchasePrice", "marketValue", "bondAmount", "interestRate", "termYears"]
               }
             },
             required: ["name", "type", "address", "coordinates", "specs", "financials"]
           }
-        }
+        })
       });
 
-      const text = response.text;
-      if (!text) throw new Error("AI returned no text content");
-      
-      const rawData = JSON.parse(text);
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || "Import failed");
+      }
+
+      const rawData = await response.json();
       const newProperty = rawData as Property;
       
       // Coordinate integrity check and auto-correction for South Africa
@@ -286,47 +280,43 @@ export default function App() {
           candidateSub.id = Math.random().toString(36).substr(2, 9);
         }
       } else {
-        if (!process.env.GEMINI_API_KEY) {
-          alert("GEMINI_API_KEY is not configured.");
-          return;
-        }
-
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-        
-        const subResponse = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
-          contents: `Find technical information about a substation in South Africa based on ${data.type}: ${data.value}. 
-          MAKE A SPECIAL EFFORT to find the Operating Voltage (in kV) and Rated Capacity (in MVA).`,
-          config: {
+        const response = await fetch("/api/ai/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: `Find technical information about a substation in South Africa based on ${data.type}: ${data.value}. 
+            MAKE A SPECIAL EFFORT to find the Operating Voltage (in kV) and Rated Capacity (in MVA).`,
             tools: [{ googleSearch: {} }],
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
+            schema: {
+              type: "OBJECT",
               properties: {
-                name: { type: Type.STRING },
-                address: { type: Type.STRING },
-                coordinates: { type: Type.ARRAY, items: { type: Type.NUMBER } },
-                status: { type: Type.STRING, enum: ['Active', 'Under Maintenance', 'Planned'] },
-                capacity: { type: Type.STRING },
-                voltageKV: { type: Type.NUMBER },
-                mvaCapacity: { type: Type.NUMBER },
-                googleMapsUrl: { type: Type.STRING }
+                name: { type: "STRING" },
+                address: { type: "STRING" },
+                coordinates: { type: "ARRAY", items: { type: "NUMBER" } },
+                status: { type: "STRING", enum: ['Active', 'Under Maintenance', 'Planned'] },
+                capacity: { type: "STRING" },
+                voltageKV: { type: "NUMBER" },
+                mvaCapacity: { type: "NUMBER" },
+                googleMapsUrl: { type: "STRING" }
               },
               required: ["name", "address", "coordinates", "status"]
             }
-          }
+          })
         });
 
-        const subText = subResponse.text;
-        if (!subText) throw new Error("AI returned no text content for substation");
-        candidateSub = JSON.parse(subText) as Substation;
-        
-        // Coordinate integrity check
-        if (!candidateSub.coordinates || !Array.isArray(candidateSub.coordinates) || candidateSub.coordinates.length < 2 || isNaN(candidateSub.coordinates[0]) || isNaN(candidateSub.coordinates[1])) {
-          candidateSub.coordinates = [-26.1311, 28.0536];
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.error || "Substation add failed");
         }
 
-        candidateSub.id = Math.random().toString(36).substr(2, 9);
+        candidateSub = await response.json();
+        
+        // Coordinate integrity check
+        if (!candidateSub || !candidateSub.coordinates || !Array.isArray(candidateSub.coordinates) || candidateSub.coordinates.length < 2 || isNaN(candidateSub.coordinates[0]) || isNaN(candidateSub.coordinates[1])) {
+          if (candidateSub) candidateSub.coordinates = [-26.1311, 28.0536];
+        }
+
+        if (candidateSub) candidateSub.id = Math.random().toString(36).substr(2, 9);
       }
 
       if (multipleSubs) {
