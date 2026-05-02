@@ -43,7 +43,7 @@ export default function SubstationListView({
                 substations.map((sub) => (
                   <tr 
                     key={sub.id} 
-                    className={`hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50 ${selectedSubstation?.id === sub.id ? 'bg-indigo-50/50' : ''}`}
+                    className={`hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50 ${selectedSubstation?.id === sub.id ? 'bg-blue-50/50' : ''}`}
                     onClick={() => onSelectSubstation(sub)}
                   >
                     <td className="px-6 py-5">
@@ -82,7 +82,7 @@ export default function SubstationListView({
                       <div className="flex items-center justify-end gap-2">
                          <button 
                           onClick={() => onSelectSubstation(sub)}
-                          className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                          className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
                           title="Locate Node"
                         >
                           <MapPin className="w-4 h-4" />

@@ -14,6 +14,7 @@ export interface Property {
     street: string;
     suburb: string;
     city: string;
+    province?: string;
     country: string;
   };
   coordinates: [number, number];

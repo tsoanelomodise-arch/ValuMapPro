@@ -170,9 +170,10 @@ export default function App() {
                   street: { type: Type.STRING },
                   suburb: { type: Type.STRING },
                   city: { type: Type.STRING },
+                  province: { type: Type.STRING },
                   country: { type: Type.STRING }
                 },
-                required: ["street", "suburb", "city", "country"]
+                required: ["street", "suburb", "city", "province", "country"]
               },
               coordinates: { type: Type.ARRAY, items: { type: Type.NUMBER } },
               specs: {
@@ -231,7 +232,13 @@ export default function App() {
       
       newProperty.id = Math.random().toString(36).substr(2, 9);
       newProperty.listingNumber = listingNumber;
-      newProperty.p24Url = `https://www.property24.com/for-sale/${listingNumber}`;
+      
+      // Construct SEO-friendly P24 URL from AI data
+      const suburbSlug = newProperty.address.suburb.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const citySlug = newProperty.address.city.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const provinceSlug = (newProperty.address as any).province.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      
+      newProperty.p24Url = `https://www.property24.com/for-sale/${suburbSlug}/${citySlug}/${provinceSlug}/${listingNumber}`;
       
       setProperties(prev => [newProperty, ...prev]);
       setSelectedProperty(newProperty);
@@ -494,9 +501,9 @@ export default function App() {
                       <span className="text-[9px] font-bold tracking-widest text-slate-400 uppercase">Evaluation Dashboard</span>
                       <h2 className="text-xl font-bold text-slate-900 tracking-tight truncate max-w-[200px] sm:max-w-xs">{selectedProperty.name}</h2>
                     </div>
-                    {selectedProperty.p24Url && (
+                    {(selectedProperty.p24Url || selectedProperty.listingNumber) && (
                       <a 
-                        href={selectedProperty.p24Url} 
+                        href={selectedProperty.p24Url || `https://www.property24.com/for-sale/${selectedProperty.address.suburb.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${selectedProperty.address.city.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${selectedProperty.listingNumber}`} 
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-lg text-[10px] font-bold border border-slate-200 hover:bg-slate-100 transition-colors uppercase tracking-widest"

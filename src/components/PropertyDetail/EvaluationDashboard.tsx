@@ -117,7 +117,7 @@ export default function EvaluationDashboard({
         <div className="p-8 border-b border-slate-100">
            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
               <div className="flex items-center gap-3">
-                 <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2 py-1 rounded">{type}</span>
+                 <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-1 rounded">{type}</span>
                  {isEditing ? (
                     <input 
                       value={p24Url || ''}
@@ -128,7 +128,7 @@ export default function EvaluationDashboard({
                  ) : onRefineProperty && (
                     <button 
                       onClick={() => onRefineProperty(property)}
-                      className="text-[10px] font-bold text-slate-400 hover:text-indigo-600 transition-colors uppercase tracking-widest"
+                      className="text-[10px] font-bold text-slate-400 hover:text-blue-600 transition-colors uppercase tracking-widest"
                     >
                       Audit Record
                     </button>
@@ -200,13 +200,13 @@ export default function EvaluationDashboard({
                           type={item.type === 'number' || item.type === 'currency' ? 'number' : 'text'}
                           value={item.path!.includes('.') ? (editedProperty as any)[item.path!.split('.')[0]][item.path!.split('.')[1]] : (editedProperty as any)[item.path!]}
                           onChange={(e) => handleFieldUpdate(item.path!, item.type === 'number' || item.type === 'currency' ? Number(e.target.value) : e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1 text-sm font-semibold outline-none focus:border-indigo-600"
+                          className="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1 text-sm font-semibold outline-none focus:border-blue-600"
                        />
                     </div>
                  ) : (
                     item.isP24 && listingNumber ? (
                       <a 
-                        href={p24Url || `https://www.property24.com/for-sale/${listingNumber}`}
+                        href={p24Url || `https://www.property24.com/for-sale/${address.suburb.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${address.city.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${listingNumber}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-lg font-bold text-blue-600 hover:underline flex items-center gap-1.5"
@@ -234,7 +234,7 @@ export default function EvaluationDashboard({
                  <div className="flex gap-12">
                     <div>
                        <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Distance</p>
-                       <p className="text-xl font-bold text-indigo-600">{(closestSubstation.distance / 1000).toFixed(2)}km</p>
+                       <p className="text-xl font-bold text-blue-600">{(closestSubstation.distance / 1000).toFixed(2)}km</p>
                     </div>
                     <div>
                        <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Grid Load</p>
@@ -252,7 +252,7 @@ export default function EvaluationDashboard({
               <textarea 
                  value={description || ''}
                  onChange={(e) => handleFieldUpdate('description', e.target.value)}
-                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-medium text-slate-600 outline-none focus:border-indigo-600 min-h-[100px] resize-none"
+                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-medium text-slate-600 outline-none focus:border-blue-600 min-h-[100px] resize-none"
                  placeholder="Enter evaluation..."
               />
            ) : (
@@ -355,12 +355,12 @@ export default function EvaluationDashboard({
                          value={editedProperty.googleMapsUrl || ''}
                          onChange={(e) => handleFieldUpdate('googleMapsUrl', e.target.value)}
                          placeholder="https://google.com/maps/..."
-                         className="text-[10px] text-indigo-600 font-bold bg-slate-50 px-2 py-1 rounded border border-slate-200 outline-none w-full text-right overflow-hidden text-ellipsis shadow-inner"
+                         className="text-[10px] text-blue-600 font-bold bg-slate-50 px-2 py-1 rounded border border-slate-200 outline-none w-full text-right overflow-hidden text-ellipsis shadow-inner"
                        />
                     ) : (
                        <div className="flex gap-2">
                           {property.googleMapsUrl && (
-                             <a href={property.googleMapsUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1 font-bold">
+                             <a href={property.googleMapsUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1 font-bold">
                                 Map <ExternalLink className="w-3 h-3" />
                              </a>
                           )}

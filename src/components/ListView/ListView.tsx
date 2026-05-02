@@ -52,7 +52,7 @@ export default function ListView({
                 properties.map((property) => (
                   <tr 
                     key={property.id} 
-                    className={`hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50 ${selectedProperty?.id === property.id ? 'bg-indigo-50/50' : ''} ${!visiblePropertyIds.includes(property.id) ? 'opacity-60 grayscale-[0.5]' : ''}`}
+                    className={`hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50 ${selectedProperty?.id === property.id ? 'bg-blue-50/50' : ''} ${!visiblePropertyIds.includes(property.id) ? 'opacity-60 grayscale-[0.5]' : ''}`}
                     onClick={() => onSelectProperty(property)}
                   >
                     <td className="px-6 py-5 text-center" onClick={(e) => e.stopPropagation()}>
@@ -102,7 +102,7 @@ export default function ListView({
                        <div className="flex items-center justify-end gap-2">
                           <button 
                             onClick={() => onOpenDetails(property)}
-                            className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                            className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
                             title="View Details"
                           >
                             <ArrowUpRight className="w-4 h-4" />
