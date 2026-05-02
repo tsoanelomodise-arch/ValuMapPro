@@ -26,7 +26,21 @@ import { jsPDF } from 'jspdf';
 const CLASSIC_RED = '#EA4335';
 
 // Custom component to integrate esri-leaflet with react-leaflet
-function EsriDynamicLayer({ url, layers, opacity, visible }: { url: string, layers?: number[], opacity: number, visible: boolean }) {
+function EsriLayer({ 
+  url, 
+  type = 'dynamic', 
+  layers, 
+  opacity, 
+  visible,
+  name
+}: { 
+  url: string, 
+  type?: 'dynamic' | 'tiled' | 'feature',
+  layers?: number[], 
+  opacity: number, 
+  visible: boolean,
+  name?: string
+}) {
   const map = useMap();
   const layerRef = React.useRef<any>(null);
 
@@ -44,30 +58,46 @@ function EsriDynamicLayer({ url, layers, opacity, visible }: { url: string, laye
         url,
         opacity,
         useCors: true,
-        zIndex: 400,
+        zIndex: type === 'tiled' ? 200 : 400,
         format: 'png32'
       };
       
-      if (layers && layers.length > 0) {
+      if (layers && layers.length > 0 && type === 'dynamic') {
         options.layers = layers;
       }
       
-      layerRef.current = esri.dynamicMapLayer(options);
-      
-      layerRef.current.on('loading', () => console.log('Cadastral Layer loading...'));
-      layerRef.current.on('load', () => console.log('Cadastral Layer loaded successfully'));
-      layerRef.current.on('error', (err: any) => {
-        console.error('Cadastral Layer error:', err?.message || 'Unknown error');
-        // Handle common ArcGIS errors
-        if (err?.message?.includes('403') || err?.message?.includes('401')) {
-          console.warn('CSG layer might require authentication or be restricted by referrer.');
+      try {
+        if (type === 'tiled') {
+          layerRef.current = esri.tiledMapLayer(options);
+        } else if (type === 'feature') {
+          layerRef.current = esri.featureLayer({
+            ...options,
+            style: () => ({
+              color: '#4f46e5',
+              weight: 1,
+              opacity: 0.5,
+              fillOpacity: 0.2
+            })
+          });
+        } else {
+          layerRef.current = esri.dynamicMapLayer(options);
         }
-      });
-      
-      layerRef.current.addTo(map);
+        
+        layerRef.current.on('loading', () => console.log(`${name || 'Esri'} Layer loading...`));
+        layerRef.current.on('load', () => console.log(`${name || 'Esri'} Layer loaded successfully`));
+        layerRef.current.on('error', (err: any) => {
+          console.error(`${name || 'Esri'} Layer error:`, err?.message || 'Unknown error');
+        });
+        
+        layerRef.current.addTo(map);
+      } catch (err) {
+        console.error(`Failed to create ${type} layer:`, err);
+      }
     } else {
-      layerRef.current.setOpacity(opacity);
-      if (layers) {
+      if (layerRef.current.setOpacity) {
+        layerRef.current.setOpacity(opacity);
+      }
+      if (layers && type === 'dynamic' && layerRef.current.setLayers) {
         layerRef.current.setLayers(layers);
       }
     }
@@ -82,7 +112,7 @@ function EsriDynamicLayer({ url, layers, opacity, visible }: { url: string, laye
         layerRef.current = null;
       }
     };
-  }, [map, url, layers, opacity, visible]);
+  }, [map, url, layers, opacity, visible, type, name]);
 
   return null;
 }
@@ -129,7 +159,7 @@ const DistanceLines = React.memo(({ propertyDistances, rulerActive }: { property
         <Polyline 
           key={`poly-line-${property.id}`}
           positions={[property.coordinates as [number, number], substation.coordinates as [number, number]]} 
-          color="#8b5cf6" 
+          color="#4285F4" 
           weight={1.0} 
           dashArray="10, 15" 
           opacity={0.85}
@@ -203,7 +233,7 @@ const SubstationLayerGroup = React.memo(({ substations, onSelect, selectedId }: 
           <Popup>
             <div className="p-1 min-w-[120px]">
               <div className="flex items-center gap-1.5 mb-1">
-                <Zap className="w-3 h-3 text-violet-600" />
+                <Zap className="w-3 h-3 text-blue-600" />
                 <p className="font-bold text-sm leading-none m-0 text-slate-900 uppercase tracking-tight">{substation.name}</p>
               </div>
               <p className="text-[10px] text-slate-500 m-0 uppercase font-bold tracking-widest">{substation.status}</p>
@@ -761,18 +791,20 @@ export default function MapComponent({
           </LayersControl.Overlay>
         </LayersControl>
 
-        <EsriDynamicLayer
+        <EsriLayer
           url="https://maps.geoscience.org.za/arcgis/rest/services/Cadastre/MapServer"
           layers={[0, 1, 2, 3, 4]}
           opacity={0.8}
           visible={showBoundaries}
+          name="Cadastral"
         />
 
-        <EsriDynamicLayer
+        <EsriLayer
           url="https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/MS_Building_Footprints_South_Africa/MapServer"
-          layers={[0]}
+          type="tiled"
           opacity={0.5}
           visible={showStructures}
+          name="Buildings"
         />
 
         <MapController center={targetCenter} rulerActive={rulerActive} />
@@ -842,7 +874,7 @@ export default function MapComponent({
                 html: `
                   <div class="flex items-center justify-center pointer-events-none">
                     <div class="bg-slate-900 text-white px-4 py-2 rounded-2xl shadow-2xl text-[12px] font-black italic whitespace-nowrap border border-white/20 flex items-center gap-2 transform -translate-y-8">
-                      <div class="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse"></div>
+                      <div class="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
                       ${distance! < 1000 ? `${distance!.toFixed(1)}m` : `${(distance! / 1000).toFixed(2)}km`}
                     </div>
                   </div>
@@ -875,7 +907,7 @@ export default function MapComponent({
           onClick={() => setShowBoundaries(!showBoundaries)}
           className={cn(
             "p-3 rounded-xl shadow-xl transition-all border",
-            showBoundaries ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+            showBoundaries ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
           )}
           title="Toggle Property Boundaries"
         >
@@ -886,7 +918,7 @@ export default function MapComponent({
           onClick={() => setShowStructures(!showStructures)}
           className={cn(
             "p-3 rounded-xl shadow-xl transition-all border",
-            showStructures ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+            showStructures ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
           )}
           title="Toggle Building Structures"
         >
@@ -897,7 +929,7 @@ export default function MapComponent({
           onClick={() => onRulerActiveChange(!rulerActive)}
           className={cn(
             "p-3 rounded-xl shadow-xl transition-all border",
-            rulerActive ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+            rulerActive ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
           )}
           title="Distance Ruler"
         >
@@ -916,7 +948,7 @@ export default function MapComponent({
           onClick={() => setIsSelectingForExport(!isSelectingForExport)}
           className={cn(
             "p-3 rounded-xl shadow-xl transition-all border",
-            isSelectingForExport ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+            isSelectingForExport ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
           )}
           title="Map Report & Export"
         >
@@ -952,11 +984,11 @@ export default function MapComponent({
           className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[1000] bg-slate-900/90 backdrop-blur-md text-white px-6 py-4 rounded-3xl shadow-2xl border border-white/10 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-5 duration-300"
           data-html2canvas-ignore="true"
         >
-           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/40">
+           <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/40">
               <Scaling className="w-5 h-5 text-white" />
            </div>
            <div>
-              <p className="text-[9px] font-black text-indigo-300 uppercase tracking-[0.2em] leading-none mb-1">Measured Distance</p>
+              <p className="text-[9px] font-black text-blue-300 uppercase tracking-[0.2em] leading-none mb-1">Measured Distance</p>
               <p className="text-2xl font-black italic tracking-tighter">
                  {distance < 1000 ? `${distance.toFixed(1)} m` : `${(distance / 1000).toFixed(2)} km`}
               </p>

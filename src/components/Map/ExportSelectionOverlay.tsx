@@ -69,7 +69,7 @@ export default function ExportSelectionOverlay({
         <div className="flex items-center justify-between mb-4">
           <button 
             onClick={toggleAll}
-            className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest hover:text-indigo-700 transition-colors"
+            className="text-[10px] font-bold text-blue-600 uppercase tracking-widest hover:text-blue-700 transition-colors"
           >
             {selectedIds.length === properties.length ? 'Deselect All' : 'Select All'}
           </button>
@@ -93,7 +93,7 @@ export default function ExportSelectionOverlay({
               <div className={cn(
                 "w-5 h-5 rounded-md border flex items-center justify-center transition-all",
                 selectedIds.includes(property.id)
-                  ? "bg-indigo-500 border-indigo-400"
+                  ? "bg-blue-500 border-blue-400"
                   : "bg-slate-50 border-slate-200 group-hover:border-slate-300"
               )}>
                 {selectedIds.includes(property.id) && <Check className="w-3 h-3 text-white" />}
@@ -125,7 +125,7 @@ export default function ExportSelectionOverlay({
             "w-full py-4 rounded-xl flex items-center justify-center gap-2 text-[11px] font-bold uppercase tracking-widest transition-all",
             selectedIds.length === 0 || isExporting
               ? "bg-slate-200 text-slate-400 cursor-not-allowed"
-              : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200"
+              : "bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200"
           )}
         >
           {isExporting ? (

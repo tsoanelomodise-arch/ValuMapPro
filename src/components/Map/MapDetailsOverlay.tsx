@@ -70,10 +70,10 @@ export default function MapDetailsOverlay({
               </div>
 
               <div className="flex items-start gap-2.5 text-[11px]">
-                <div className="mt-1 w-1 h-1 rounded-full bg-indigo-400 shrink-0" />
+                <div className="mt-1 w-1 h-1 rounded-full bg-blue-400 shrink-0" />
                 <div className="flex flex-wrap gap-x-1.5 gap-y-0.5">
-                  <span className="font-bold text-indigo-500 uppercase tracking-tighter text-[9px]">Grid Dist:</span>
-                  <span className="text-indigo-700 font-bold">
+                  <span className="font-bold text-blue-500 uppercase tracking-tighter text-[9px]">Grid Dist:</span>
+                  <span className="text-blue-700 font-bold">
                     {closestSubstationInfo ? `${(closestSubstationInfo.distance / 1000).toFixed(2)}km` : 'N/A'}
                   </span>
                   {closestSubstationInfo && (
@@ -101,14 +101,14 @@ export default function MapDetailsOverlay({
                   )}
                   {property.listingNumber && (
                     <div className="flex items-start gap-2.5 text-[11px]">
-                      <div className="mt-1 w-1 h-1 rounded-full bg-indigo-400 shrink-0" />
+                      <div className="mt-1 w-1 h-1 rounded-full bg-slate-400 shrink-0" />
                       <div className="flex flex-wrap gap-x-2 gap-y-0.5">
-                        <span className="font-bold text-indigo-600 uppercase tracking-tighter text-[9px]">P24 Ref:</span>
+                        <span className="font-bold text-slate-500 uppercase tracking-tighter text-[9px]">P24 Ref:</span>
                         <a 
                           href={`https://www.property24.com/property-details/${property.listingNumber}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-indigo-700 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                          className="text-slate-900 font-bold hover:text-indigo-600 hover:underline cursor-pointer flex items-center gap-1"
                           onClick={(e) => e.stopPropagation()}
                         >
                           {property.listingNumber}
@@ -160,10 +160,10 @@ export default function MapDetailsOverlay({
         {...props}
       >
         <div className="bg-white overflow-hidden rounded-2xl shadow-2xl border border-slate-200 pointer-events-auto">
-          <div className="p-3 bg-violet-50 border-b border-violet-100 flex justify-between items-center cursor-move">
+          <div className="p-3 bg-blue-50 border-b border-blue-100 flex justify-between items-center cursor-move">
             <div className="flex items-center gap-2">
-              <Zap className="w-3 h-3 text-violet-600" />
-              <span className="text-[9px] font-black rounded bg-violet-100 text-violet-700 px-2 py-0.5 uppercase tracking-widest">
+              <Zap className="w-3 h-3 text-blue-600" />
+              <span className="text-[9px] font-black rounded bg-blue-100 text-blue-700 px-2 py-0.5 uppercase tracking-widest">
                 Infrastructure
               </span>
             </div>
@@ -172,7 +172,7 @@ export default function MapDetailsOverlay({
                 e.stopPropagation();
                 onCloseSubstation();
               }} 
-              className="p-1 hover:bg-violet-100 rounded-full transition-colors cursor-pointer"
+              className="p-1 hover:bg-blue-100 rounded-full transition-colors cursor-pointer"
             >
               <X className="w-3 h-3 text-slate-400" />
             </button>
@@ -192,8 +192,8 @@ export default function MapDetailsOverlay({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 text-[9px] font-black text-violet-400 italic">
-               <div className="w-1 h-1 bg-violet-400 rounded-full animate-pulse" />
+            <div className="flex items-center gap-2 text-[9px] font-black text-blue-400 italic">
+               <div className="w-1 h-1 bg-blue-400 rounded-full animate-pulse" />
                Grid-Connected & Active
             </div>
           </div>

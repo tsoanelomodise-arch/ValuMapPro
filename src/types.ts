@@ -58,4 +58,4 @@ export interface Substation {
   availableAmps?: number;
 }
 
-export const SUBSTATION_COLOR = '#8b5cf6'; // Violet
+export const SUBSTATION_COLOR = '#4285F4'; // Classic Google Maps Blue
