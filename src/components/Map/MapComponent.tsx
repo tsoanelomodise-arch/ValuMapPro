@@ -130,7 +130,7 @@ const DistanceLines = React.memo(({ propertyDistances, rulerActive }: { property
           key={`poly-line-${property.id}`}
           positions={[property.coordinates as [number, number], substation.coordinates as [number, number]]} 
           color="#8b5cf6" 
-          weight={2.5} 
+          weight={1.0} 
           dashArray="10, 15" 
           opacity={0.85}
           smoothFactor={2}
@@ -169,12 +169,12 @@ const createColoredIcon = (color: string, isSelected: boolean = false, label?: s
           <div class="flex flex-row gap-0.5">
             ${distanceLabel ? `
               <div class="px-1 py-0 select-none">
-                  <span class="text-[7px] font-black italic text-violet-700 whitespace-nowrap leading-none drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]">${distanceLabel}</span>
+                  <span class="text-[7px] font-black italic text-red-600 whitespace-nowrap leading-none drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]">${distanceLabel}</span>
               </div>
             ` : ''}
             ${priceLabel ? `
               <div class="px-1 py-0 select-none">
-                  <span class="text-[7px] font-bold text-emerald-700 whitespace-nowrap leading-none drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]">${priceLabel}</span>
+                  <span class="text-[7px] font-bold text-red-600 whitespace-nowrap leading-none drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]">${priceLabel}</span>
               </div>
             ` : ''}
           </div>
@@ -260,7 +260,8 @@ export default function MapComponent({
   const [mapType, setMapType] = useState<'street' | 'satellite'>('street');
   const [isSelectingForExport, setIsSelectingForExport] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const mapRef = React.useRef<HTMLDivElement>(null);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const mapInstanceRef = React.useRef<L.Map | null>(null);
 
   // Improved performance: pre-calculate closest substation for all properties
   const propertyDistances = React.useMemo(() => {
@@ -340,6 +341,25 @@ export default function MapComponent({
     return null;
   };
 
+  // Helper to ensure map is properly sized
+  function MapResizeHandler() {
+    const map = useMap();
+    useEffect(() => {
+      mapInstanceRef.current = map;
+      const resizeObserver = new ResizeObserver(() => {
+        map.invalidateSize();
+      });
+      if (map.getContainer()) {
+        resizeObserver.observe(map.getContainer());
+      }
+      return () => {
+        resizeObserver.disconnect();
+        mapInstanceRef.current = null;
+      };
+    }, [map]);
+    return null;
+  }
+
   // Determine stable coordinates for map centering
   const targetCenter = React.useMemo(() => {
     if (selectedProperty && Array.isArray(selectedProperty.coordinates) && !isNaN(selectedProperty.coordinates[0])) {
@@ -366,15 +386,21 @@ export default function MapComponent({
   }, [rulerActive]);
 
   const handleExportToPDF = async (selectedProperties: Property[]) => {
-    if (!mapRef.current) return;
+    if (!containerRef.current) return;
     
     setIsExporting(true);
     try {
-      // Small delay to ensure map markers and tiles are fully settled
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Prepare map for capture
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.stop();
+        mapInstanceRef.current.invalidateSize();
+      }
+
+      // Small delay to ensure map markers and tiles are fully settled after stop/invalidate
+      await new Promise(resolve => setTimeout(resolve, 800));
 
       // Target the actual leaflet container for better isolation
-      const container = mapRef.current?.querySelector('.leaflet-container') as HTMLElement;
+      const container = containerRef.current?.querySelector('.leaflet-container') as HTMLElement;
       if (!container) {
         throw new Error("Leaflet map container not found");
       }
@@ -386,13 +412,13 @@ export default function MapComponent({
         const canvas = await html2canvas(container, {
           useCORS: true,
           logging: false,
-          scale: 2.5, // High scale for resolution
+          scale: 2, 
           backgroundColor: '#ffffff',
           allowTaint: false,
-          imageTimeout: 15000,
+          imageTimeout: 20000,
           removeContainer: true,
           onclone: (clonedDoc) => {
-            // Aggressively clean modern color functions that html2canvas can't parse
+            // Clean modern color functions that html2canvas can't parse
             const styleTags = clonedDoc.getElementsByTagName('style');
             const MODERN_COLOR_REGEX = /(oklch|oklab|color-mix)\([^)]+\)/g;
             const FALLBACK_COLOR = '#6366f1';
@@ -574,14 +600,20 @@ export default function MapComponent({
   };
 
   const handleExportAsImage = async (selectedProperties: Property[]) => {
-    if (!mapRef.current) return;
+    if (!containerRef.current) return;
     
     setIsExporting(true);
     try {
-      // Small delay to ensure map markers and tiles are fully settled
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Prepare map for capture
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.stop();
+        mapInstanceRef.current.invalidateSize();
+      }
 
-      const container = mapRef.current?.querySelector('.leaflet-container') as HTMLElement;
+      // Small delay to ensure map markers and tiles are fully settled
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      const container = containerRef.current?.querySelector('.leaflet-container') as HTMLElement;
       if (!container) {
         throw new Error("Leaflet map container not found");
       }
@@ -589,10 +621,10 @@ export default function MapComponent({
       const canvas = await html2canvas(container, {
         useCORS: true,
         logging: false,
-        scale: 3, // Increased scale for ultra-high resolution images
+        scale: 2, 
         backgroundColor: '#ffffff',
         allowTaint: false,
-        imageTimeout: 15000,
+        imageTimeout: 20000,
         removeContainer: true,
         onclone: (clonedDoc) => {
           // Clean style blocks of any modern color functions that break capture
@@ -684,7 +716,7 @@ export default function MapComponent({
 
   return (
     <div 
-      ref={mapRef}
+      ref={containerRef}
       className={cn(
       "relative rounded-xl overflow-hidden border border-slate-200 shadow-sm transition-all duration-500 ease-in-out",
       isFullscreen ? "fixed inset-0 z-[5000] rounded-none border-none" : "w-full h-full"
@@ -694,16 +726,20 @@ export default function MapComponent({
         zoom={13} 
         zoomSnap={0.25}
         zoomDelta={0.25}
-        wheelPxPerZoomLevel={120}
+        wheelPxPerZoomLevel={120} 
         style={{ height: '100%', width: '100%' }} 
         zoomControl={false}
-        preferCanvas={true}
+        preferCanvas={false}
+        whenReady={(map) => {
+          mapInstanceRef.current = map.target;
+        }}
       >
+        <MapResizeHandler />
         <LayersControl position="topright">
           <LayersControl.BaseLayer checked={mapType === 'street'} name="Street View">
             <TileLayer
-              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-              attribution='&copy; CARTO'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; OpenStreetMap contributors'
               crossOrigin="anonymous"
             />
           </LayersControl.BaseLayer>
@@ -795,7 +831,7 @@ export default function MapComponent({
 
         {rulerPoints.length === 2 && (
           <>
-            <Polyline positions={rulerPoints} color="#0f172a" weight={4} dashArray="8, 12" />
+            <Polyline positions={rulerPoints} color="#0f172a" weight={2} dashArray="8, 12" />
             <Marker 
               position={[
                 (rulerPoints[0][0] + rulerPoints[1][0]) / 2,
