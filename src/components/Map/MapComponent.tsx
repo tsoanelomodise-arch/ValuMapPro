@@ -267,7 +267,7 @@ const createCandidateIcon = (isSelected: boolean = false, label?: string, isProp
 };
 
 // Memoized Substation Markers
-const SubstationLayerGroup = React.memo(({ substations, onSelect, selectedId }: { substations: Substation[], onSelect?: (s: Substation) => void, selectedId?: string }) => {
+const SubstationLayerGroup = React.memo(({ substations, onSelect, selectedId, opacity = 1.0 }: { substations: Substation[], onSelect?: (s: Substation) => void, selectedId?: string, opacity?: number }) => {
   return (
     <>
       {substations.filter(s => Array.isArray(s.coordinates) && s.coordinates.length >= 2 && !isNaN(s.coordinates[0])).map(substation => (
@@ -275,6 +275,7 @@ const SubstationLayerGroup = React.memo(({ substations, onSelect, selectedId }: 
           key={`${substation.id}-${substation.coordinates[0]}-${substation.coordinates[1]}`}
           position={substation.coordinates}
           icon={createColoredIcon(SUBSTATION_COLOR, selectedId === substation.id, substation.name, undefined, undefined, undefined, substation.id)}
+          opacity={opacity}
           zIndexOffset={selectedId === substation.id ? 1000 : 0}
           eventHandlers={{
             click: () => onSelect?.(substation),
@@ -463,6 +464,7 @@ export default function MapComponent({
   const [isLayerPanelOpen, setIsLayerPanelOpen] = useState(false);
   const [layerOpacities, setLayerOpacities] = useState({
     base: 1.0,
+    substations: 1.0,
     cadastre: 0.8,
     buildings: 0.5
   });
@@ -1021,7 +1023,12 @@ export default function MapComponent({
           );
         }), [properties, propertyDistances, selectedProperty?.id, onSelectProperty])}
         
-        <SubstationLayerGroup substations={substations} onSelect={onSelectSubstation} selectedId={selectedSubstation?.id} />
+        <SubstationLayerGroup 
+          substations={substations} 
+          onSelect={onSelectSubstation} 
+          selectedId={selectedSubstation?.id} 
+          opacity={layerOpacities.substations}
+        />
         
         <CandidateSubstationLayerGroup 
           substations={candidateSubstations} 
@@ -1170,6 +1177,19 @@ export default function MapComponent({
 
                   <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                     <div className="flex justify-between items-center mb-2">
+                      <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Substations Layer</span>
+                      <span className="text-[10px] font-black text-indigo-600">{Math.round(layerOpacities.substations * 100)}%</span>
+                    </div>
+                    <input 
+                      type="range" min="0" max="1" step="0.05"
+                      value={layerOpacities.substations}
+                      onChange={(e) => setLayerOpacities(prev => ({ ...prev, substations: parseFloat(e.target.value) }))}
+                      className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    />
+                  </div>
+
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <div className="flex justify-between items-center mb-2">
                       <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Cadastral / Boundaries</span>
                       <div className="flex items-center gap-2">
                         <button 
@@ -1214,7 +1234,7 @@ export default function MapComponent({
 
               <div className="pt-2">
                 <button 
-                  onClick={() => setLayerOpacities({ base: 1.0, cadastre: 0.8, buildings: 0.5 })}
+                  onClick={() => setLayerOpacities({ base: 1.0, substations: 1.0, cadastre: 0.8, buildings: 0.5 })}
                   className="w-full py-2.5 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors"
                 >
                   Reset to Defaults
