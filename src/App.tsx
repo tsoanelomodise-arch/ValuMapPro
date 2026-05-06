@@ -160,13 +160,10 @@ export default function App() {
       const ai = new GoogleGenAI({ apiKey });
       
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Find and extract property details for the South African property associated with this reference: ${importValue}.
-        If a URL is provided, analyze the content directly. If a listing number is provided, search for the official Property24 listing.
-        
-        Extract the information into the following JSON format. Use Google Search to find the EXACT GPS coordinates (Latitude, Longitude) for this property if possible.
-        Try to find the EXACT Property24 URL which typically looks like https://www.property24.com/for-sale/<suburb>/<city>/<province>/<areaId>/<listingNumber>.
-        If certain financial details are not available, estimate them based on standard SA market rates.`,
+        model: "gemini-flash-latest",
+        contents: `Find and extract details for SA property: ${importValue}.
+        Extract to JSON: name, type, description, p24Url, address(street, suburb, city, province, country), coordinates[lat, lng], specs(standSize, titleType), financials(price, marketValue, bond, interest, term).
+        Use Google Search for coordinates if needed.`,
         config: {
           responseMimeType: "application/json",
           tools: [{ googleSearch: {} }],
@@ -317,9 +314,9 @@ export default function App() {
         const ai = new GoogleGenAI({ apiKey });
         
         const subResponse = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
-          contents: `Find technical information about a substation in South Africa based on ${data.type}: ${data.value}. 
-          MAKE A SPECIAL EFFORT to find the Operating Voltage (in kV) and Rated Capacity (in MVA).`,
+          model: "gemini-flash-latest",
+          contents: `Find tech details for SA substation (${data.type}: ${data.value}). 
+          Need: Name, Address, Coordinates [lat, lng], Status, Volt (kV), Capacity (MVA).`,
           config: {
             responseMimeType: "application/json",
             tools: [{ googleSearch: {} }],

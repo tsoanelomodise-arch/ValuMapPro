@@ -24,20 +24,10 @@ export async function searchSubstations(area: string): Promise<AISubstation[]> {
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `SEARCH TASK: Find ACTUAL electrical substations in or near ${area}, South Africa.
-      
-      1. Use Google Search to find current Eskom and municipal substation names.
-      2. Identify at least 3-5 major substations if possible.
-      3. For each substation, provide:
-         - Official Name
-         - Approximate Address or Location
-         - PRECISE GPS Coordinates as [Latitude, Longitude] (Strictly decimal format, e.g., [-26.123, 28.456])
-         - Operating Voltage in kV (e.g., 11, 88, 132, 275, 400)
-         - Rated Capacity in MVA
-         - A brief technical description
-      
-      Output ONLY valid JSON according to the schema.`,
+      model: "gemini-flash-latest",
+      contents: `Find 3-5 actual electrical substations in or near ${area}, South Africa.
+      Return the official name, address, coordinates [lat, lng], voltage (kV), capacity (MVA), and a short description.
+      Use Google Search results.`,
       config: {
         responseMimeType: "application/json",
         tools: [{ googleSearch: {} }],
