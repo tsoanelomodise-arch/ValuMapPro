@@ -208,6 +208,11 @@ export default function App() {
     ), [substations, searchQuery]);
 
   const handleDiscoverLand = useCallback(async (bounds: { north: number, south: number, east: number, west: number }) => {
+    if (!selectedSubstation) {
+      addNotification("Please select an anchor substation first to focus the discovery.", 'info');
+      return;
+    }
+
     if (discoveryAbortControllerRef.current) {
       discoveryAbortControllerRef.current.abort();
     }
@@ -218,27 +223,12 @@ export default function App() {
     setCandidateProperties([]);
     setDiscoveryProgress({ current: 0, total: 1 }); // Start with indeterminate phase
     
-    console.log("Starting Land Discovery with bounds:", bounds);
+    console.log("Starting Land Discovery anchored by:", selectedSubstation.name);
     try {
-      // Find substations within or very near the current visible bounds to prioritize search near them
-      const visibleSubstations = (substations || []).filter(s => {
-        if (!s.coordinates || !Array.isArray(s.coordinates)) return false;
-        const [lat, lng] = s.coordinates;
-        // Expand bounds slightly to catch nearby stations
-        return lat <= bounds.north + 0.05 && 
-               lat >= bounds.south - 0.05 && 
-               lng <= bounds.east + 0.05 && 
-               lng >= bounds.west - 0.05;
-      }).map(s => `${s.name} (approx. ${s.coordinates[0].toFixed(4)}, ${s.coordinates[1].toFixed(4)})`);
-
-      if (visibleSubstations.length > 0) {
-        console.log("Prioritizing discovery near substations:", visibleSubstations);
-      }
-
       // Phase 1: Find listing links
-      addNotification("Searching Property24 and Private Property databases...", 'info');
-      console.log("Land Discovery: Searching area", { north: bounds.north, south: bounds.south, east: bounds.east, west: bounds.west, substations: visibleSubstations });
-      const links = await findLandListingLinks(bounds.north, bounds.south, bounds.east, bounds.west, visibleSubstations);
+      addNotification(`Searching near ${selectedSubstation.name}...`, 'info');
+      console.log("Land Discovery: Searching area", { north: bounds.north, south: bounds.south, east: bounds.east, west: bounds.west, anchor: selectedSubstation.name });
+      const links = await findLandListingLinks(bounds.north, bounds.south, bounds.east, bounds.west, selectedSubstation);
       console.log("Land Discovery: Found links", links);
       
       if (controller.signal.aborted) return;
@@ -266,6 +256,8 @@ export default function App() {
           if (res && !controller.signal.aborted) {
             // Extract coordinates and handle South Africa specifics
             let finalCoords = res.coordinates;
+            let coordinatesFlag: 'precise' | 'approximate' = 'precise';
+
             if (Array.isArray(finalCoords) && finalCoords.length >= 2) {
               let [lat, lng] = finalCoords;
               // In SA, lat is negative (~ -22 to -35) and lng is positive (~ 16 to 33)
@@ -277,15 +269,25 @@ export default function App() {
               }
             }
 
+            // Fallback for missing coordinates: jitter around anchor substation
             if (!finalCoords || !Array.isArray(finalCoords) || isNaN(finalCoords[0])) {
-               console.warn("Skipping property due to missing coordinates:", res.name);
-               continue;
+               console.warn("Using jittered anchor coordinates for property due to missing precise coordinates:", res.name);
+               coordinatesFlag = 'approximate';
+               // Add 500m-1km random jitter relative to substation
+               const jitter = () => (Math.random() - 0.5) * 0.01; 
+               finalCoords = [
+                 selectedSubstation.coordinates[0] + jitter(),
+                 selectedSubstation.coordinates[1] + jitter()
+               ];
             }
 
             const newCandidate: Property = {
               ...res,
               id: `candidate-land-${Date.now()}-${i}`,
               coordinates: finalCoords as [number, number],
+              description: coordinatesFlag === 'approximate' 
+                ? `${res.description || ''} (Approximate location based on anchor)`.trim()
+                : res.description,
               type: 'Agricultural',
               specs: res.specs || { standSize: 1000, titleType: 'Full title' },
               financials: {
@@ -304,13 +306,9 @@ export default function App() {
       }
 
       if (count > 0) {
-        addNotification(`Successfully discovered and mapped ${count} vacant land listings near substations.`, 'success');
+        addNotification(`Successfully discovered and listed ${count} vacant land listings near the anchor substation.`, 'success');
       } else if (!controller.signal.aborted) {
-        if (links.length > 0) {
-          addNotification("Found listing links but failed to extract precise spatial coordinates. This usually happens when address data is obfuscated in the listing. Try searching a different area.", 'warning');
-        } else {
-          addNotification("No vacant land listings found in this area. No results from Property24 / Private Property index.", 'info');
-        }
+        addNotification("No vacant land listings found in this area. No results from Property24 / Private Property index.", 'info');
       }
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return;
@@ -323,7 +321,7 @@ export default function App() {
         discoveryAbortControllerRef.current = null;
       }
     }
-  }, [addNotification, substations]);
+  }, [addNotification, selectedSubstation]);
 
   const handleDiscoverNearby = useCallback(async (bounds: { north: number, south: number, east: number, west: number }) => {
     if (discoveryAbortControllerRef.current) {

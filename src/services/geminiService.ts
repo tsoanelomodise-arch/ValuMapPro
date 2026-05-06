@@ -255,18 +255,18 @@ export async function searchVacantLandByArea(north: number, south: number, east:
   }
 }
 
-export async function findLandListingLinks(north: number, south: number, east: number, west: number, nearbySubstations?: string[]): Promise<string[]> {
+export async function findLandListingLinks(north: number, south: number, east: number, west: number, anchorSubstation?: Substation): Promise<string[]> {
   const ai = getAI();
   if (!ai) return [];
 
-  const substationContext = nearbySubstations && nearbySubstations.length > 0 
-    ? `\nCRITICAL PRIORITY: You must find listings that are within a 3km maximum radius of these electrical substations: ${nearbySubstations.join(', ')}. This is for a high-priority energy project. If no land is found within 3km of THESE exact stations, broaden search slightly but stay as close as possible.`
+  const substationContext = anchorSubstation
+    ? `\nCRITICAL TARGET: You MUST find vacant land listings specifically within a 3km radius of the "${anchorSubstation.name}" substation located at ${anchorSubstation.coordinates[0]}, ${anchorSubstation.coordinates[1]}. This is an anchor point. Prioritize listings that mention proximity to electrical infrastructure or this specific station if possible.`
     : "";
 
   try {
     const response = await ai.models.generateContent({
       model: "gemini-flash-latest",
-      contents: `Search for actual VACANT LAND, RESIDENTIAL STANDS, or AGRICULTURAL LAND listings for sale in South Africa inside this area:
+      contents: `Search for actual VACANT LAND, RESIDENTIAL STANDS, or AGRICULTURAL LAND listings for sale in South Africa near this area:
       Latitude ${north} to ${south}, Longitude ${west} to ${east}.${substationContext}
       
       Focus on Property24 (property24.com) and Private Property.
@@ -318,7 +318,7 @@ export async function importPropertyListing(input: string): Promise<Property | n
       model: "gemini-flash-latest",
       contents: `Find and extract details for South African property listing: ${input}.
       Extract to JSON: name, type, description, p24Url, agent(Listing Agent name), agentPhone, address(street, suburb, city, province, country), coordinates[lat, lng], specs(standSize, titleType), financials(price, marketValue).
-      Use Google Search. If it's a Property24 listing, find the specific coordinates for that address.`,
+      Use Google Search. If it's a Property24 listing, find the specific coordinates for that address. COORDINATES ARE OPTIONAL: If the address is obfuscated or coordinates are hard to find, focus on name/price/agent and leave coordinates as null.`,
       config: {
         responseMimeType: "application/json",
         tools: [{ googleSearch: {} }],
@@ -341,7 +341,7 @@ export async function importPropertyListing(input: string): Promise<Property | n
                 country: { type: Type.STRING }
               }
             },
-            coordinates: { type: Type.ARRAY, items: { type: Type.NUMBER } },
+            coordinates: { type: Type.ARRAY, items: { type: Type.NUMBER }, nullable: true },
             specs: {
               type: Type.OBJECT,
               properties: {
@@ -357,7 +357,7 @@ export async function importPropertyListing(input: string): Promise<Property | n
               }
             }
           },
-          required: ["name", "type", "address", "coordinates"]
+          required: ["name", "type", "address"]
         }
       }
     });

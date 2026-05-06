@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Navigation2, Zap, Home, ArrowRight, User, Phone, Briefcase, Hash, ExternalLink } from 'lucide-react';
+import { X, Navigation2, Zap, Home, ArrowRight, User, Phone, Briefcase, Hash, ExternalLink, Mountain } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Property, Substation } from '../../types';
 import { cn } from '../../lib/utils';
@@ -12,6 +12,8 @@ interface MapDetailsOverlayProps {
   onCloseProperty: () => void;
   onCloseSubstation: () => void;
   onOpenDetails: (property: Property) => void;
+  onDiscoverLand?: (substation: Substation) => void;
+  isDiscoveringLand?: boolean;
   'data-html2canvas-ignore'?: string;
 }
 
@@ -23,6 +25,8 @@ export default function MapDetailsOverlay({
   onCloseProperty,
   onCloseSubstation,
   onOpenDetails,
+  onDiscoverLand,
+  isDiscoveringLand,
   ...props
 }: MapDetailsOverlayProps) {
   if (!property && !substation) return null;
@@ -191,6 +195,23 @@ export default function MapDetailsOverlay({
                 <span className="text-slate-900 uppercase">{substation.capacity || 'N/A'}</span>
               </div>
             </div>
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDiscoverLand?.(substation);
+              }}
+              disabled={isDiscoveringLand}
+              className={cn(
+                "w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 mb-4",
+                isDiscoveringLand 
+                  ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                  : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200 active:scale-[0.98]"
+              )}
+            >
+              <Mountain className="w-3.5 h-3.5" />
+              {isDiscoveringLand ? "Scanning Area..." : "Discover Land Near Here"}
+            </button>
 
             <div className="flex items-center gap-2 text-[9px] font-black text-blue-400 italic">
                <div className="w-1 h-1 bg-blue-400 rounded-full animate-pulse" />

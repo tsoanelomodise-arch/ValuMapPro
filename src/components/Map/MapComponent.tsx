@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents, useMap, LayersControl, LayerGroup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMapEvents, useMap, LayersControl, LayerGroup } from 'react-leaflet';
 import L from 'leaflet';
 import * as esri from 'esri-leaflet';
 import { Property, Substation, PROPERTY_TYPE_COLORS, SUBSTATION_COLOR } from '../../types';
@@ -202,7 +202,7 @@ const DistanceLines = React.memo(({ propertyDistances, rulerActive }: { property
 
 const createColoredIcon = (color: string, isSelected: boolean = false, label?: string, distanceLabel?: string, priceLabel?: string, propertyId?: string, substationId?: string) => {
   const width = isSelected ? 28 : 20;
-  const height = width * 1.4;
+  const height = Math.round(width * (34 / 24));
   
   return L.divIcon({
     className: 'custom-div-icon',
@@ -211,7 +211,7 @@ const createColoredIcon = (color: string, isSelected: boolean = false, label?: s
         ${propertyId ? `data-property-id="${propertyId}"` : ''} 
         ${substationId ? `data-substation-id="${substationId}"` : ''}
       >
-        <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-lg">
+        <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-lg" preserveAspectRatio="xMidYMid meet">
           <path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 34 12 34C12 34 24 21 24 12C24 5.37 18.63 0 12 0Z" fill="${color}" stroke="white" stroke-width="1.5"/>
           <circle cx="12" cy="12" r="3.5" fill="white" opacity="0.9"/>
         </svg>
@@ -236,14 +236,14 @@ const createColoredIcon = (color: string, isSelected: boolean = false, label?: s
         </div>
       </div>
     `,
-    iconSize: [120, height + 60],
-    iconAnchor: [60, height],
+    iconSize: [160, height + 60],
+    iconAnchor: [80, height],
   });
 };
 
 const createCandidateIcon = (isSelected: boolean = false, label?: string, isProperty: boolean = false) => {
   const width = isSelected ? 32 : 24;
-  const height = width * 1.4;
+  const height = Math.round(width * (34 / 24));
   const color = isProperty ? '#059669' : '#4f46e5'; // Emerald 600 for land, Indigo 600 for stations
   
   return L.divIcon({
@@ -251,7 +251,7 @@ const createCandidateIcon = (isSelected: boolean = false, label?: string, isProp
     html: `
       <div class="relative flex flex-col items-center">
         <div class="absolute -inset-2 bg-${isProperty ? 'emerald' : 'indigo'}-500/20 rounded-full blur-md animate-pulse"></div>
-        <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-2xl relative z-10">
+        <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-2xl relative z-10" preserveAspectRatio="xMidYMid meet">
           <path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 34 12 34C12 34 24 21 24 12C24 5.37 18.63 0 12 0Z" fill="${color}" stroke="white" stroke-width="2"/>
           <path d="M12 8V16M8 12H16" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
         </svg>
@@ -262,8 +262,8 @@ const createCandidateIcon = (isSelected: boolean = false, label?: string, isProp
         ` : ''}
       </div>
     `,
-    iconSize: [120, height + 40],
-    iconAnchor: [60, height],
+    iconSize: [160, height + 40],
+    iconAnchor: [80, height],
   });
 };
 
@@ -1044,6 +1044,21 @@ export default function MapComponent({
           selectedId={selectedProperty?.id}
         />
 
+        {selectedSubstation && isDiscoveringLand && (
+          <Circle
+            center={selectedSubstation.coordinates}
+            radius={3000}
+            pathOptions={{
+              color: '#10b981', // emerald-500
+              fillColor: '#10b981',
+              fillOpacity: 0.1,
+              dashArray: '10, 10',
+              weight: 2,
+              className: 'animate-pulse'
+            }}
+          />
+        )}
+
         {rulerPoints.map((point, idx) => (
           <Marker 
             key={idx} 
@@ -1344,17 +1359,25 @@ export default function MapComponent({
                     }
                   }}
                   className={cn(
-                    "p-3 rounded-xl shadow-xl transition-all border relative flex items-center justify-center",
+                    "p-3 rounded-xl shadow-xl transition-all border relative flex items-center justify-center overflow-hidden",
                     isDiscoveringLand 
                       ? "bg-emerald-500 text-white border-emerald-600 hover:bg-emerald-600 shadow-emerald-200/50" 
-                      : "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700 active:scale-95"
+                      : (selectedSubstation 
+                          ? "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700 active:scale-95"
+                          : "bg-white text-slate-300 border-slate-100 cursor-not-allowed group-hover:border-emerald-200")
                   )}
-                  title={isDiscoveringLand ? "Stop Searching" : "Find Vacant Land"}
+                  title={isDiscoveringLand ? "Stop Searching" : (selectedSubstation ? `Find Land near ${selectedSubstation.name}` : "Select a substation first")}
                 >
                   {isDiscoveringLand ? (
                     <X className="w-4 h-4 animate-in fade-in zoom-in duration-300" />
                   ) : (
-                    <Mountain className="w-4 h-4" />
+                    <Mountain className={cn("w-4 h-4", !selectedSubstation && !isDiscoveringLand && "opacity-40")} />
+                  )}
+
+                  {!selectedSubstation && !isDiscoveringLand && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-slate-50/50">
+                       <div className="w-1 h-1 bg-slate-300 rounded-full" />
+                    </div>
                   )}
                   
                   {isDiscoveringLand && (
@@ -1363,6 +1386,12 @@ export default function MapComponent({
                     </span>
                   )}
                 </button>
+
+                {!selectedSubstation && !isDiscoveringLand && (
+                   <span className="text-[7px] font-black text-slate-400 uppercase tracking-tighter w-16 leading-tight opacity-0 group-hover:opacity-100 transition-opacity">
+                      Select Anchor Substation
+                   </span>
+                )}
 
                 {isDiscoveringLand && (
                    <div className="flex flex-col">
@@ -1395,15 +1424,27 @@ export default function MapComponent({
         />
       )}
 
-      {isFullscreen && (
+      {(isFullscreen || selectedSubstation) && (
           <MapDetailsOverlay 
-            property={selectedProperty}
+            property={isFullscreen ? selectedProperty : null}
             substation={selectedSubstation}
             closestSubstationInfo={propertyDistances.find(pd => pd.property.id === selectedProperty?.id)}
             isFullscreen={isFullscreen}
             onCloseProperty={() => onSelectProperty(null as any)}
             onCloseSubstation={() => onSelectSubstation?.(null as any)}
             onOpenDetails={onOpenDetails!}
+            onDiscoverLand={(sub) => {
+              if (mapInstanceRef.current) {
+                const bounds = mapInstanceRef.current.getBounds();
+                onDiscoverLand?.({
+                  north: bounds.getNorth(),
+                  south: bounds.getSouth(),
+                  east: bounds.getEast(),
+                  west: bounds.getWest()
+                });
+              }
+            }}
+            isDiscoveringLand={isDiscoveringLand}
             data-html2canvas-ignore="true"
           />
       )}
