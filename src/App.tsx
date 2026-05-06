@@ -212,10 +212,18 @@ export default function App() {
     discoveryAbortControllerRef.current = controller;
 
     setIsDiscoveringLand(true);
+    console.log("Starting Land Discovery with bounds:", bounds);
     try {
       const results = await searchVacantLandByArea(bounds.north, bounds.south, bounds.east, bounds.west);
+      console.log("Land Discovery Raw Results Count:", results.length);
       
       if (controller.signal.aborted) return;
+
+      if (!results || results.length === 0) {
+        addNotification("No vacant land discovered in this exact view. Try shifting the map or zooming out.", 'info');
+        setIsDiscoveringLand(false);
+        return;
+      }
 
       const newCandidates: Property[] = results.map((res, index) => {
         // Coordinate integrity check for South Africa
@@ -223,9 +231,14 @@ export default function App() {
         if (Array.isArray(finalCoords) && finalCoords.length >= 2) {
           let [lat, lng] = finalCoords;
           // In SA, lat is negative (~ -22 to -35) and lng is positive (~ 16 to 33)
-          // If we get [lng, lat], flip them
+          // If we get [lng, lat] (e.g. [28.5, -26.1]), flip them to [-26.1, 28.5]
           if (lat > 0 && lng < 0) {
             finalCoords = [lng, lat];
+          }
+          // If model returns positive lat by mistake e.g. [26.1, 28.5]
+          // we know for SA it MUST be negative lat.
+          else if (lat > 0 && lat < 40 && lng > 0) {
+              finalCoords = [-lat, lng];
           }
         }
 
@@ -273,17 +286,30 @@ export default function App() {
       
       if (controller.signal.aborted) return;
 
-      const newCandidates: Substation[] = results.map((res, index) => ({
-        id: `candidate-${Date.now()}-${index}`,
-        name: res.name,
-        owner: res.owner,
-        address: res.address,
-        coordinates: res.coordinates,
-        status: 'Planned',
-        voltageKV: res.voltageKV,
-        mvaCapacity: res.mvaCapacity,
-        capacity: res.voltageKV ? `${res.voltageKV}kV` : undefined
-      }));
+      const newCandidates: Substation[] = results.map((res, index) => {
+        let finalCoords = res.coordinates;
+        if (Array.isArray(finalCoords) && finalCoords.length >= 2) {
+          let [lat, lng] = finalCoords;
+          // SA Flip logic
+          if (lat > 0 && lng < 0) {
+            finalCoords = [lng, lat];
+          } else if (lat > 0 && lat < 40 && lng > 0) {
+            finalCoords = [-lat, lng];
+          }
+        }
+
+        return {
+          id: `candidate-${Date.now()}-${index}`,
+          name: res.name,
+          owner: res.owner,
+          address: res.address,
+          coordinates: finalCoords as [number, number],
+          status: 'Planned',
+          voltageKV: res.voltageKV,
+          mvaCapacity: res.mvaCapacity,
+          capacity: res.voltageKV ? `${res.voltageKV}kV` : undefined
+        };
+      });
 
       // Filter out candidates that are already in our substations list (by name/approx coordinates)
       const filteredCandidates = newCandidates.filter(candidate => {
@@ -357,31 +383,27 @@ export default function App() {
     try {
       const property = await importPropertyListing(importValue);
       
+      console.log("Property Import Raw Result:", property);
+      
       if (controller.signal.aborted) return;
       if (!property) throw new Error("AI failed to extract property details.");
       
-      const newProperty = property;
+      const newProperty = { ...property };
       
       // Coordinate integrity check and auto-correction for South Africa
-      // Leaflet expects [lat, lng]. If we get [lng, lat], we flip them.
-      // SA Lats are roughly -20 to -35. SA Lngs are roughly 16 to 33.
       if (newProperty.coordinates && Array.isArray(newProperty.coordinates) && newProperty.coordinates.length >= 2) {
         let [lat, lng] = newProperty.coordinates;
         
-        // Basic heuristic: If first coord is positive and second is negative, they are definitely flipped for SA
+        // Flip if swapped
         if (lat > 0 && lng < 0) {
           [lat, lng] = [lng, lat];
         }
-        // If both are positive, and we are expecting SA, one might be flipped and positive? 
-        // More research needed, but typically it's just a lat/lng swap.
-        
-        if (isNaN(lat) || isNaN(lng)) {
-          newProperty.coordinates = [-26.1311, 28.0536];
-        } else {
-          newProperty.coordinates = [lat, lng];
+        // Force negative lat for SA if model returned positive
+        else if (lat > 0 && lat < 40 && lng > 0) {
+          lat = -lat;
         }
-      } else {
-        newProperty.coordinates = [-26.1311, 28.0536];
+        
+        newProperty.coordinates = [lat, lng];
       }
       
       newProperty.id = Math.random().toString(36).substr(2, 9);

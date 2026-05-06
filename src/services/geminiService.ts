@@ -26,7 +26,7 @@ export async function searchSubstations(area: string): Promise<AISubstation[]> {
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: `Find 3-5 actual electrical substations in or near ${area}, South Africa.
       Return the official name, owner/operator, address, coordinates [lat, lng], voltage (kV), capacity (MVA), and a short description.
       Use Google Search results.`,
@@ -62,8 +62,21 @@ export async function searchSubstations(area: string): Promise<AISubstation[]> {
       }
     });
 
+    console.log("Substation Search Response:", response);
     const text = response.text || '';
-    return JSON.parse(text || '{"substations": []}').substations || [];
+    try {
+      const jsonContent = text.includes('```json') 
+        ? text.split('```json')[1].split('```')[0].trim() 
+        : text.includes('```') 
+          ? text.split('```')[1].split('```')[0].trim()
+          : text.trim();
+          
+      const parsed = JSON.parse(jsonContent || '{"substations": []}');
+      return parsed.substations || [];
+    } catch (e) {
+      console.error("Failed to parse Gemini substation search response:", text);
+      return [];
+    }
   } catch (error) {
     console.error("Error searching substations with AI:", error);
     return [];
@@ -76,7 +89,7 @@ export async function searchSubstationsByArea(north: number, south: number, east
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: `Find 5-10 actual electrical substations located strictly within this geographic bounding box in South Africa:
       North: ${north}
       South: ${south}
@@ -118,8 +131,21 @@ export async function searchSubstationsByArea(north: number, south: number, east
       }
     });
 
+    console.log("Substation Area Discovery Response:", response);
     const text = response.text || '';
-    return JSON.parse(text || '{"substations": []}').substations || [];
+    try {
+      const jsonContent = text.includes('```json') 
+        ? text.split('```json')[1].split('```')[0].trim() 
+        : text.includes('```') 
+          ? text.split('```')[1].split('```')[0].trim()
+          : text.trim();
+          
+      const parsed = JSON.parse(jsonContent || '{"substations": []}');
+      return parsed.substations || [];
+    } catch (e) {
+      console.error("Failed to parse Gemini substation area response:", text);
+      return [];
+    }
   } catch (error) {
     console.error("Error discovering substations in area with AI:", error);
     return [];
@@ -132,16 +158,15 @@ export async function searchVacantLandByArea(north: number, south: number, east:
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
-      contents: `Find 5-10 actual vacant land / residential agricultural land for sale listings strictly within this geographic bounding box in South Africa (e.g. from Property24, Private Property):
-      North: ${north}
-      South: ${south}
-      East: ${east}
-      West: ${west}
+      model: "gemini-3-flash-preview",
+      contents: `Search for 5-10 actual vacant land, residential stands, or agricultural land for sale located in or near this area in South Africa:
+      Bounding Box - North: ${north}, South: ${south}, East: ${east}, West: ${west}
       
-      Return the property details: name (title), type (always 'Vacant Land'), description, p24Url, address (street, suburb, city, province, country), coordinates [lat, lng], standSize (m2), and price (ZAR).
-      Ensure the coordinates are precise and inside the requested area.
-      Use Google Search results. If no listings are found exactly in bounds, check the outer suburb.`,
+      Look for listings on Property24 and Private Property.
+      
+      Return details for each: title (name), description, listing URL, address (street, suburb, city, province), coordinates [lat, lng], stand size (m2), and price (ZAR). 
+      Important: Ensure coordinates are accurate for South Africa (lat ~ -20 to -35).
+      If no listings are found exactly inside bounds, prioritize findings in the surrounding suburbs of this region.`,
       config: {
         responseMimeType: "application/json",
         tools: [{ googleSearch: {} }],
@@ -165,12 +190,12 @@ export async function searchVacantLandByArea(north: number, south: number, east:
                       city: { type: Type.STRING },
                       province: { type: Type.STRING },
                       country: { type: Type.STRING }
-                    }
+                    },
+                    required: ["suburb", "city"]
                   },
                   coordinates: { 
                     type: Type.ARRAY,
-                    items: { type: Type.NUMBER },
-                    description: "Array of [latitude, longitude]"
+                    items: { type: Type.NUMBER }
                   },
                   specs: {
                     type: Type.OBJECT,
@@ -184,11 +209,10 @@ export async function searchVacantLandByArea(north: number, south: number, east:
                     properties: {
                       purchasePrice: { type: Type.NUMBER },
                       marketValue: { type: Type.NUMBER }
-                    },
-                    required: ["purchasePrice"]
+                    }
                   }
                 },
-                required: ["name", "address", "coordinates", "p24Url", "financials"]
+                required: ["name", "address", "coordinates", "p24Url"]
               }
             }
           },
@@ -197,7 +221,16 @@ export async function searchVacantLandByArea(north: number, south: number, east:
       }
     });
 
+    console.log("Gemini Land Discovery Response:", response);
     const text = response.text || '';
+    
+    if (!text) {
+      console.warn("Gemini returned empty text. Candidates:", response.candidates);
+      if (response.candidates?.[0]?.finishReason) {
+        console.warn("Finish Reason:", response.candidates[0].finishReason);
+      }
+    }
+
     try {
       // Handle potential markdown wrapping just in case
       const jsonContent = text.includes('```json') 
@@ -224,7 +257,7 @@ export async function importPropertyListing(input: string): Promise<Property | n
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: `Find and extract details for SA property: ${input}.
       Extract to JSON: name, type, description, p24Url, agent(Listing Agent name), agentPhone, address(street, suburb, city, province, country), coordinates[lat, lng], specs(standSize, titleType), financials(price, marketValue).
       Use Google Search results.`,
@@ -271,6 +304,7 @@ export async function importPropertyListing(input: string): Promise<Property | n
       }
     });
 
+    console.log("Property Import Response:", response);
     const text = response.text || '';
     try {
       const jsonContent = text.includes('```json') 
@@ -296,7 +330,7 @@ export async function searchSubstationDetails(type: string, value: string): Prom
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: `Find technical details for South African electrical substation (${type}: ${value}). 
       Need: Name, Address, Coordinates [lat, lng], Status, Voltage (kV), Capacity (MVA).
       Use Google Search results.`,
@@ -320,6 +354,7 @@ export async function searchSubstationDetails(type: string, value: string): Prom
       }
     });
 
+    console.log("Substation Detail Response:", response);
     const text = response.text || '';
     try {
       const jsonContent = text.includes('```json') 
