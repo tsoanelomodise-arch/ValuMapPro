@@ -8,6 +8,7 @@ import {
   X, 
   Navigation2, 
   Zap, 
+  Check,
   Maximize2, 
   Minimize2, 
   Home,
@@ -132,10 +133,15 @@ L.Marker.prototype.options.icon = DefaultIcon;
 interface MapComponentProps {
   properties: Property[];
   substations?: Substation[];
+  candidateSubstations?: Substation[];
   onSelectProperty: (property: Property) => void;
   selectedProperty: Property | null;
   onSelectSubstation?: (substation: Substation) => void;
   selectedSubstation?: Substation | null;
+  onAddSubstation?: (substation: Substation) => void;
+  onDiscoverNearby?: (center: [number, number]) => void;
+  onClearCandidates?: () => void;
+  isDiscovering?: boolean;
   rulerActive: boolean;
   onRulerActiveChange: (active: boolean) => void;
   onOpenDetails?: (property: Property) => void;
@@ -216,6 +222,31 @@ const createColoredIcon = (color: string, isSelected: boolean = false, label?: s
   });
 };
 
+const createCandidateIcon = (isSelected: boolean = false, label?: string) => {
+  const width = isSelected ? 28 : 20;
+  const height = width * 1.4;
+  const color = '#94a3b8'; // Slate 400 for candidates
+  
+  return L.divIcon({
+    className: 'custom-div-icon candidate-icon',
+    html: `
+      <div class="relative flex flex-col items-center">
+        <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-lg opacity-80">
+          <path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 34 12 34C12 34 24 21 24 12C24 5.37 18.63 0 12 0Z" fill="${color}" stroke="white" stroke-width="1" stroke-dasharray="2,2"/>
+          <path d="M12 8V16M8 12H16" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        ${label ? `
+          <div class="mt-0.5 px-1 py-0 select-none">
+              <span class="text-[7px] font-bold text-slate-400 uppercase whitespace-nowrap leading-none">${label}</span>
+          </div>
+        ` : ''}
+      </div>
+    `,
+    iconSize: [80, height + 20],
+    iconAnchor: [40, height],
+  });
+};
+
 // Memoized Substation Markers
 const SubstationLayerGroup = React.memo(({ substations, onSelect, selectedId }: { substations: Substation[], onSelect?: (s: Substation) => void, selectedId?: string }) => {
   return (
@@ -270,19 +301,84 @@ function MapController({ center, rulerActive }: { center: [number, number] | nul
   return null;
 }
 
+// Memoized Candidate Substation Markers
+const CandidateSubstationLayerGroup = React.memo(({ 
+  substations, 
+  onAdd, 
+  selectedId 
+}: { 
+  substations: Substation[], 
+  onAdd?: (s: Substation) => void, 
+  selectedId?: string 
+}) => {
+  return (
+    <>
+      {substations.map(substation => (
+        <Marker
+          key={`candidate-${substation.id}`}
+          position={substation.coordinates}
+          icon={createCandidateIcon(selectedId === substation.id, substation.name)}
+          zIndexOffset={selectedId === substation.id ? 900 : -100}
+        >
+          <Popup>
+            <div className="p-3 min-w-[180px]">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center">
+                  <Zap className="w-3.5 h-3.5 text-slate-400" />
+                </div>
+                <div>
+                  <p className="font-black text-xs m-0 text-slate-900 uppercase tracking-tight leading-none">{substation.name}</p>
+                  <p className="text-[8px] text-slate-400 m-0 uppercase font-bold tracking-[0.1em] mt-1">Candidate Entity</p>
+                </div>
+              </div>
+              
+              <div className="space-y-1.5 mb-4">
+                <p className="text-[10px] text-slate-500 m-0 leading-relaxed italic">{substation.address}</p>
+                {substation.voltageKV && (
+                  <p className="text-[9px] font-bold text-slate-700 bg-slate-50 px-1.5 py-0.5 rounded inline-block">
+                    {substation.voltageKV} kV
+                  </p>
+                )}
+              </div>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAdd?.(substation);
+                }}
+                className="w-full bg-slate-900 hover:bg-black text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 group"
+              >
+                <Check className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                Confirm & Import
+              </button>
+            </div>
+          </Popup>
+        </Marker>
+      ))}
+    </>
+  );
+});
+
 export default function MapComponent({ 
   properties, 
   substations = [],
+  candidateSubstations = [],
   onSelectProperty, 
   selectedProperty,
   onSelectSubstation,
   selectedSubstation,
+  onAddSubstation,
   rulerActive,
   onRulerActiveChange,
   onOpenDetails,
   isFullscreen,
-  onFullscreenChange
+  onFullscreenChange,
+  onDiscoverNearby,
+  onClearCandidates,
+  isDiscovering = false
 }: MapComponentProps) {
+  const [isSearchingArea, setIsSearchingArea] = useState(false);
+  const [currentMapName, setCurrentMapName] = useState<string | null>(null);
   const [rulerPoints, setRulerPoints] = useState<[number, number][]>([]);
   const [distance, setDistance] = useState<number | null>(null);
   const [showBoundaries, setShowBoundaries] = useState(true);
@@ -833,6 +929,11 @@ export default function MapComponent({
         }), [properties, propertyDistances, selectedProperty?.id, onSelectProperty])}
         
         <SubstationLayerGroup substations={substations} onSelect={onSelectSubstation} selectedId={selectedSubstation?.id} />
+        
+        <CandidateSubstationLayerGroup 
+          substations={candidateSubstations} 
+          onAdd={onAddSubstation} 
+        />
 
         {rulerPoints.map((point, idx) => (
           <Marker 
@@ -954,6 +1055,42 @@ export default function MapComponent({
         >
           <FileDown className="w-4 h-4" />
         </button>
+
+        {onDiscoverNearby && (
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => {
+                if (mapInstanceRef.current) {
+                  const center = mapInstanceRef.current.getCenter();
+                  onDiscoverNearby([center.lat, center.lng]);
+                }
+              }}
+              disabled={isDiscovering}
+              className={cn(
+                "p-3 rounded-xl shadow-xl transition-all border group relative",
+                isDiscovering ? "bg-slate-100 text-slate-400 border-slate-200" : "bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 active:scale-95"
+              )}
+              title="Discover Nearby Substations"
+            >
+              <Zap className={cn("w-4 h-4", isDiscovering && "animate-pulse")} />
+              {isDiscovering && (
+                <span className="absolute left-14 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-lg whitespace-nowrap shadow-2xl">
+                  Searching Area...
+                </span>
+              )}
+            </button>
+            
+            {onClearCandidates && candidateSubstations.length > 0 && (
+              <button
+                onClick={onClearCandidates}
+                className="p-3 bg-white text-slate-400 hover:text-red-500 rounded-xl shadow-xl transition-all border border-slate-200 hover:border-red-100"
+                title="Clear Discovery Results"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {isSelectingForExport && (

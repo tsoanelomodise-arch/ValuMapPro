@@ -26,7 +26,6 @@ interface EvaluationDashboardProps {
   substations?: Substation[];
   onDeleteProperty?: (id: string) => void;
   onUpdateProperty?: (property: Property) => void;
-  onRefineProperty?: (property: Property) => void;
   initialEditMode?: boolean;
 }
 
@@ -35,7 +34,6 @@ export default function EvaluationDashboard({
   substations = [], 
   onDeleteProperty, 
   onUpdateProperty, 
-  onRefineProperty, 
   initialEditMode = false 
 }: EvaluationDashboardProps) {
   const [isEditing, setIsEditing] = useState(initialEditMode);
@@ -67,31 +65,55 @@ export default function EvaluationDashboard({
 
   const { specs, financials, address } = isEditing ? editedProperty : property;
 
+  const extractCoordsFromUrl = (url: string): [number, number] | null => {
+    const regex = /@(-?\d+\.\d+),(-?\d+\.\d+)|ll=(-?\d+\.\d+),(-?\d+\.\d+)|q=(-?\d+\.\d+),(-?\d+\.\d+)/;
+    const match = url.match(regex);
+    if (match) {
+      const lat = parseFloat(match[1] || match[3] || match[5]);
+      const lng = parseFloat(match[2] || match[4] || match[6]);
+      if (!isNaN(lat) && !isNaN(lng)) return [lat, lng];
+    }
+    return null;
+  };
+
+  const generateMapsUrl = (lat: number, lng: number) => `https://www.google.com/maps?q=${lat},${lng}`;
+
   const handleFieldUpdate = (path: string, value: any) => {
     setEditedProperty(prev => {
-      // Direct name update
-      if (path === 'name') return { ...prev, [path]: value };
-      if (path === 'type') return { ...prev, [path]: value };
-      if (path === 'description') return { ...prev, [path]: value };
-      if (path === 'agent') return { ...prev, [path]: value };
-      if (path === 'listingNumber') return { ...prev, [path]: value };
-      if (path === 'googleMapsUrl') return { ...prev, [path]: value };
-      if (path === 'p24Url') return { ...prev, [path]: value };
-      if (path === 'agentPhone') return { ...prev, [path]: value };
+      let next = { ...prev };
       
-      const parts = path.split('.');
-      if (parts.length === 2) {
-        const category = parts[0] as keyof Property;
-        const field = parts[1];
-        return {
-          ...prev,
-          [category]: {
-            ...(prev[category] as any),
-            [field]: value
-          }
-        } as Property;
+      // Direct name update
+      if (path === 'name') next = { ...next, [path]: value };
+      else if (path === 'type') next = { ...next, [path]: value };
+      else if (path === 'description') next = { ...next, [path]: value };
+      else if (path === 'agent') next = { ...next, [path]: value };
+      else if (path === 'listingNumber') next = { ...next, [path]: value };
+      else if (path === 'googleMapsUrl') {
+        next = { ...next, [path]: value };
+        // Sync coords from URL
+        const extracted = extractCoordsFromUrl(value);
+        if (extracted) {
+          next.coordinates = extracted;
+          setCoordsString(`${extracted[0]}, ${extracted[1]}`);
+        }
       }
-      return prev;
+      else if (path === 'p24Url') next = { ...next, [path]: value };
+      else if (path === 'agentPhone') next = { ...next, [path]: value };
+      else {
+        const parts = path.split('.');
+        if (parts.length === 2) {
+          const category = parts[0] as keyof Property;
+          const field = parts[1];
+          next = {
+            ...next,
+            [category]: {
+              ...(next[category] as any),
+              [field]: value
+            }
+          } as Property;
+        }
+      }
+      return next;
     });
   };
 
@@ -122,32 +144,61 @@ export default function EvaluationDashboard({
       <div className="max-w-4xl mx-auto">
         {/* Header Information */}
         <div className="p-8 border-b border-slate-100">
-           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
               <div className="flex items-center gap-3">
                  <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-1 rounded">{type}</span>
-                 {isEditing ? (
-                    <div className="flex gap-2">
-                       <input 
-                         value={p24Url || ''}
-                         onChange={(e) => handleFieldUpdate('p24Url', e.target.value)}
-                         className="text-[10px] text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-200 outline-none w-40"
-                         placeholder="P24 Link"
-                       />
-                       <input 
-                         value={editedProperty.googleMapsUrl || ''}
-                         onChange={(e) => handleFieldUpdate('googleMapsUrl', e.target.value)}
-                         className="text-[10px] text-blue-400 bg-slate-50 px-2 py-1 rounded border border-slate-200 outline-none w-40"
-                         placeholder="Maps Link"
-                       />
-                    </div>
-                 ) : onRefineProperty && (
-                    <button 
-                      onClick={() => onRefineProperty(property)}
-                      className="text-[10px] font-bold text-slate-400 hover:text-blue-600 transition-colors uppercase tracking-widest"
-                    >
-                      Audit Record
-                    </button>
-                 )}
+                 <div className="flex gap-2 items-center">
+                    {/* Property24 Link */}
+                    {isEditing ? (
+                      <input 
+                        value={p24Url || ''}
+                        onChange={(e) => handleFieldUpdate('p24Url', e.target.value)}
+                        className="text-[10px] text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-200 outline-none w-32"
+                        placeholder="P24 Link"
+                      />
+                    ) : p24Url && (
+                      <a 
+                        href={getAbsoluteUrl(p24Url)} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-[10px] font-bold text-slate-400 hover:text-blue-600 transition-colors uppercase tracking-widest flex items-center gap-1"
+                      >
+                        P24 <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    )}
+
+                    {/* Google Maps Link */}
+                    {isEditing ? (
+                      <div className="flex gap-1 items-center">
+                        <input 
+                          value={editedProperty.googleMapsUrl || ''}
+                          onChange={(e) => handleFieldUpdate('googleMapsUrl', e.target.value)}
+                          className="text-[10px] text-blue-600 bg-slate-50 px-2 py-1 rounded border border-slate-200 outline-none w-32"
+                          placeholder="Maps Link"
+                        />
+                        {editedProperty.googleMapsUrl && (
+                          <a 
+                            href={getAbsoluteUrl(editedProperty.googleMapsUrl)} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="p-1 hover:bg-blue-50 rounded transition-colors text-blue-600"
+                            title="Verify Map Location"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
+                    ) : property.googleMapsUrl && (
+                      <a 
+                        href={getAbsoluteUrl(property.googleMapsUrl)} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-[10px] font-bold text-blue-600 hover:text-blue-700 transition-colors uppercase tracking-widest flex items-center gap-1 border-l border-slate-200 pl-2"
+                      >
+                        Maps <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    )}
+                 </div>
               </div>
               <div className="flex gap-2">
                  {isEditing ? (
@@ -200,10 +251,6 @@ export default function EvaluationDashboard({
              { label: 'Valuation', val: formatCurrency(financials.purchasePrice), path: 'financials.purchasePrice', type: 'currency' },
              { label: 'Market Value', val: formatCurrency(financials.marketValue), path: 'financials.marketValue', type: 'currency' },
              { label: 'Surface Area', val: `${specs.standSize} m²`, path: 'specs.standSize', type: 'number', suffix: 'm²' },
-             { label: 'Interest', val: `${financials.interestRate}%`, path: 'financials.interestRate', type: 'number', suffix: '%' },
-             { label: 'Term', val: `${financials.termYears} Y`, path: 'financials.termYears', type: 'number', suffix: 'Y' },
-             { label: 'Bond Amount', val: formatCurrency(financials.bondAmount), path: 'financials.bondAmount', type: 'currency' },
-             { label: 'Deposit', val: formatCurrency(financials.deposit), path: 'financials.deposit', type: 'currency' },
              { label: 'Ref Number', val: listingNumber || 'N/A', path: 'listingNumber', type: 'text', isP24: true },
              { label: 'Title Type', val: specs.titleType, path: 'specs.titleType', type: 'text' },
            ].map((item: any, i) => (
@@ -350,7 +397,11 @@ export default function EvaluationDashboard({
                              const lat = parseFloat(parts[0]);
                              const lng = parseFloat(parts[1]);
                              if (!isNaN(lat) && !isNaN(lng)) {
-                               setEditedProperty(prev => ({ ...prev, coordinates: [lat, lng] }));
+                               setEditedProperty(prev => ({ 
+                                 ...prev, 
+                                 coordinates: [lat, lng],
+                                 googleMapsUrl: generateMapsUrl(lat, lng)
+                               }));
                              }
                            }
                          }}
@@ -365,30 +416,44 @@ export default function EvaluationDashboard({
                  </div>
                  <div className="flex justify-between text-xs items-center pt-2 border-t border-slate-50">
                     <span className="text-slate-400 font-medium whitespace-nowrap mr-4">Maps Link</span>
-                    {isEditing ? (
-                       <input 
-                         value={editedProperty.googleMapsUrl || ''}
-                         onChange={(e) => handleFieldUpdate('googleMapsUrl', e.target.value)}
-                         placeholder="https://google.com/maps/..."
-                         className="text-[10px] text-blue-600 font-bold bg-slate-50 px-2 py-1 rounded border border-slate-200 outline-none w-full text-right overflow-hidden text-ellipsis shadow-inner"
-                       />
-                    ) : (
-                       <div className="flex gap-2">
-                          {property.googleMapsUrl && (
-                             <a href={getAbsoluteUrl(property.googleMapsUrl)} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1 font-bold">
-                                Map <ExternalLink className="w-3 h-3" />
-                             </a>
+                    <div className="flex items-center gap-2 flex-1 justify-end">
+                      {isEditing ? (
+                        <>
+                          <input 
+                            value={editedProperty.googleMapsUrl || ''}
+                            onChange={(e) => handleFieldUpdate('googleMapsUrl', e.target.value)}
+                            placeholder="https://google.com/maps/..."
+                            className="text-[10px] text-blue-600 font-bold bg-slate-50 px-2 py-1 rounded border border-slate-200 outline-none w-full text-right overflow-hidden text-ellipsis shadow-inner"
+                          />
+                          {editedProperty.googleMapsUrl && (
+                            <a 
+                              href={getAbsoluteUrl(editedProperty.googleMapsUrl)} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-700 p-1 bg-white border border-slate-100 rounded"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
                           )}
-                          <a 
-                            href={`https://csggis.drdlr.gov.za/`} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="text-emerald-600 hover:underline flex items-center gap-1 font-bold pl-2 border-l border-slate-200"
-                          >
-                             CSG GIS <ExternalLink className="w-3 h-3" />
-                          </a>
-                       </div>
-                    )}
+                        </>
+                      ) : (
+                        <div className="flex gap-2">
+                           {property.googleMapsUrl && (
+                              <a href={getAbsoluteUrl(property.googleMapsUrl)} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1 font-bold">
+                                 Map <ExternalLink className="w-3 h-3" />
+                              </a>
+                           )}
+                           <a 
+                             href={`https://csggis.drdlr.gov.za/`} 
+                             target="_blank" 
+                             rel="noopener noreferrer" 
+                             className="text-emerald-600 hover:underline flex items-center gap-1 font-bold pl-2 border-l border-slate-200"
+                           >
+                              CSG GIS <ExternalLink className="w-3 h-3" />
+                           </a>
+                        </div>
+                      )}
+                    </div>
                  </div>
               </div>
            </div>

@@ -26,10 +26,6 @@ export interface Property {
   financials: {
     purchasePrice: number;
     marketValue: number;
-    bondAmount: number;
-    deposit: number;
-    interestRate: number;
-    termYears: number;
   };
   images?: string[];
 }

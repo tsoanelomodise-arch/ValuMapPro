@@ -61,10 +61,6 @@ export const propertyExtractorSchema = {
         purchasePrice: { type: Type.NUMBER },
         marketValue: { type: Type.NUMBER },
         expectedGrowth: { type: Type.NUMBER },
-        bondAmount: { type: Type.NUMBER },
-        deposit: { type: Type.NUMBER },
-        interestRate: { type: Type.NUMBER },
-        termYears: { type: Type.NUMBER },
         income: { type: Type.NUMBER },
         expenses: { type: Type.NUMBER }
       }

@@ -24,7 +24,7 @@ import {
   Check,
   Zap
 } from 'lucide-react';
-import { searchSubstations, AISubstation } from './services/geminiService';
+import { searchSubstations, searchSubstationsByNearby, AISubstation } from './services/geminiService';
 import { GoogleGenAI, Type } from "@google/genai";
 import { cn } from './lib/utils';
 
@@ -96,6 +96,7 @@ export default function App() {
   const [importValue, setImportValue] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [propertyToDelete, setPropertyToDelete] = useState<string | null>(null);
+  const [propertiesToDelete, setPropertiesToDelete] = useState<string[] | null>(null);
   const [isSubstationModalOpen, setIsSubstationModalOpen] = useState(false);
   const [substationToEdit, setSubstationToEdit] = useState<Substation | null>(null);
   const [substationToDelete, setSubstationToDelete] = useState<null | string>(null);
@@ -105,6 +106,8 @@ export default function App() {
   const [isRulerActive, setIsRulerActive] = useState(false);
   const [isEditingRequested, setIsEditingRequested] = useState(false);
   const [hiddenPropertyIds, setHiddenPropertyIds] = usePersistedState<string[]>('propscope_hidden_properties', []);
+  const [candidateSubstations, setCandidateSubstations] = useState<Substation[]>([]);
+  const [isDiscovering, setIsDiscovering] = useState(false);
 
   const togglePropertyVisibility = useCallback((id: string) => {
     setHiddenPropertyIds(prev => 
@@ -125,7 +128,10 @@ export default function App() {
   const filteredProperties = useMemo(() => 
     properties.filter(p => 
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.address.suburb.toLowerCase().includes(searchQuery.toLowerCase())
+      p.address.suburb.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.address.street.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.address.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.type.toLowerCase().includes(searchQuery.toLowerCase())
     ), [properties, searchQuery]);
 
   const filteredSubstations = useMemo(() =>
@@ -134,6 +140,53 @@ export default function App() {
       s.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.status.toLowerCase().includes(searchQuery.toLowerCase())
     ), [substations, searchQuery]);
+
+  const handleDiscoverNearby = useCallback(async (center: [number, number]) => {
+    setIsDiscovering(true);
+    try {
+      const results = await searchSubstationsByNearby(center[0], center[1]);
+      
+      const newCandidates: Substation[] = results.map((res, index) => ({
+        id: `candidate-${Date.now()}-${index}`,
+        name: res.name,
+        address: res.address,
+        coordinates: res.coordinates,
+        status: 'Planned',
+        voltageKV: res.voltageKV,
+        mvaCapacity: res.mvaCapacity,
+        capacity: res.voltageKV ? `${res.voltageKV}kV` : undefined
+      }));
+
+      // Filter out candidates that are already in our substations list (by name/approx coordinates)
+      const filteredCandidates = newCandidates.filter(candidate => {
+        return !substations.some(s => 
+          s.name.toLowerCase() === candidate.name.toLowerCase() ||
+          (Math.abs(s.coordinates[0] - candidate.coordinates[0]) < 0.0001 && 
+           Math.abs(s.coordinates[1] - candidate.coordinates[1]) < 0.0001)
+        );
+      });
+
+      setCandidateSubstations(filteredCandidates);
+      
+      if (filteredCandidates.length === 0) {
+        alert("No new substations discovered in this immediate area.");
+      }
+    } catch (error) {
+      console.error("Discovery failed:", error);
+    } finally {
+      setIsDiscovering(false);
+    }
+  }, [substations]);
+
+  const handleAddCandidate = useCallback((candidate: Substation) => {
+    const newSub: Substation = {
+      ...candidate,
+      id: `sub-${Date.now()}`,
+      status: 'Active' // Set to active once confirmed
+    };
+    setSubstations(prev => [...prev, newSub]);
+    setCandidateSubstations(prev => prev.filter(c => c.id !== candidate.id));
+  }, [setSubstations]);
 
   const handleImport = useCallback(async () => {
     if (!importValue) return;
@@ -162,7 +215,7 @@ export default function App() {
       const response = await ai.models.generateContent({
         model: "gemini-flash-latest",
         contents: `Find and extract details for SA property: ${importValue}.
-        Extract to JSON: name, type, description, p24Url, address(street, suburb, city, province, country), coordinates[lat, lng], specs(standSize, titleType), financials(price, marketValue, bond, interest, term).
+        Extract to JSON: name, type, description, p24Url, address(street, suburb, city, province, country), coordinates[lat, lng], specs(standSize, titleType), financials(price, marketValue).
         Use Google Search for coordinates if needed.`,
         config: {
           responseMimeType: "application/json",
@@ -198,13 +251,9 @@ export default function App() {
                 type: Type.OBJECT,
                 properties: {
                   purchasePrice: { type: Type.NUMBER },
-                  marketValue: { type: Type.NUMBER },
-                  bondAmount: { type: Type.NUMBER },
-                  deposit: { type: Type.NUMBER },
-                  interestRate: { type: Type.NUMBER },
-                  termYears: { type: Type.NUMBER }
+                  marketValue: { type: Type.NUMBER }
                 },
-                required: ["purchasePrice", "marketValue", "bondAmount", "interestRate", "termYears"]
+                required: ["purchasePrice", "marketValue"]
               }
             },
             required: ["name", "type", "address", "coordinates", "specs", "financials"]
@@ -462,10 +511,15 @@ export default function App() {
                       <MapComponent 
                          properties={filteredProperties.filter(p => !hiddenPropertyIds.includes(p.id))} 
                          substations={filteredSubstations}
+                         candidateSubstations={candidateSubstations}
                          onSelectProperty={handleSelectProperty} 
                          selectedProperty={selectedProperty}
                          onSelectSubstation={setSelectedSubstation}
                          selectedSubstation={selectedSubstation}
+                         onAddSubstation={handleAddCandidate}
+                         onDiscoverNearby={handleDiscoverNearby}
+                         onClearCandidates={() => setCandidateSubstations([])}
+                         isDiscovering={isDiscovering}
                          rulerActive={isRulerActive}
                          onRulerActiveChange={setIsRulerActive}
                          onOpenDetails={handleOpenDetails}
@@ -493,6 +547,7 @@ export default function App() {
                          }}
                          selectedProperty={selectedProperty}
                          onDeleteProperty={setPropertyToDelete}
+                         onDeleteMultipleProperties={setPropertiesToDelete}
                       />
                     ) : (
                       <SubstationListView 
@@ -554,7 +609,6 @@ export default function App() {
                       substations={substations}
                       onDeleteProperty={setPropertyToDelete}
                       onUpdateProperty={handleUpdateProperty}
-                      onRefineProperty={() => {/* logic moved to dashboard or separate handler */}}
                       initialEditMode={isEditingRequested}
                     />
                 </div>
@@ -667,6 +721,11 @@ export default function App() {
 
               <SubstationAddForm 
                 onAdd={handleAddSubstation} 
+                onShowCandidates={(candidates) => {
+                  setCandidateSubstations(candidates);
+                  setIsSubstationModalOpen(false);
+                  setView('map');
+                }}
                 isSubmitting={isImporting} 
               />
             </div>
@@ -904,11 +963,12 @@ export default function App() {
         </div>
       )}
 
-      {(propertyToDelete || substationToDelete) && (
+      {(propertyToDelete || propertiesToDelete || substationToDelete) && (
         <div className="fixed inset-0 z-[3000] flex items-center justify-center p-6">
           <div 
             onClick={() => {
               setPropertyToDelete(null);
+              setPropertiesToDelete(null);
               setSubstationToDelete(null);
             }}
             className="absolute inset-0 bg-slate-900/60"
@@ -920,11 +980,15 @@ export default function App() {
               <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-6 border border-red-100">
                 <AlertTriangle className="w-8 h-8 text-red-600" />
               </div>
-              <h3 className="text-lg font-semibold text-slate-900 mb-1 tracking-tight">Remove Resource?</h3>
+              <h3 className="text-lg font-semibold text-slate-900 mb-1 tracking-tight">
+                {propertiesToDelete ? `Remove ${propertiesToDelete.length} Properties?` : 'Remove Resource?'}
+              </h3>
               <p className="text-xs text-slate-500 font-medium leading-relaxed mb-8 px-4">
                 {substationToDelete 
                   ? "This record will be permanently purged from the spatial database."
-                  : "This property analysis and all associated data will be removed."}
+                  : propertiesToDelete 
+                    ? "All selected property analyses and associated data will be removed."
+                    : "This property analysis and all associated data will be removed."}
               </p>
               
               <div className="flex flex-col w-full gap-3">
@@ -935,6 +999,13 @@ export default function App() {
                       setProperties(prev => prev.filter(p => p.id !== propertyToDelete));
                       setPropertyToDelete(null);
                       setSelectedProperty(null);
+                    }
+                    if (propertiesToDelete) {
+                      setProperties(prev => prev.filter(p => !propertiesToDelete.includes(p.id)));
+                      setPropertiesToDelete(null);
+                      if (selectedProperty && propertiesToDelete.includes(selectedProperty.id)) {
+                        setSelectedProperty(null);
+                      }
                     }
                     if (substationToDelete) {
                       setSubstations(prev => prev.filter(s => s.id !== substationToDelete));
@@ -950,6 +1021,7 @@ export default function App() {
                   onClick={(e) => {
                     e.stopPropagation();
                     setPropertyToDelete(null);
+                    setPropertiesToDelete(null);
                     setSubstationToDelete(null);
                   }}
                   className="w-full bg-slate-50 text-slate-500 font-semibold py-3.5 rounded-xl hover:bg-slate-100 transition-all text-[11px] tracking-widest uppercase"

@@ -6,10 +6,11 @@ import { cn } from '../../lib/utils';
 
 interface SubstationAddFormProps {
   onAdd: (data: { type: 'address' | 'url' | 'coords' | 'direct', value: string, payload?: Substation | Substation[] }) => void;
+  onShowCandidates?: (candidates: Substation[]) => void;
   isSubmitting: boolean;
 }
 
-export default function SubstationAddForm({ onAdd, isSubmitting }: SubstationAddFormProps) {
+export default function SubstationAddForm({ onAdd, onShowCandidates, isSubmitting }: SubstationAddFormProps) {
   const [type, setType] = useState<'address' | 'url' | 'coords' | 'ai_search'>('ai_search');
   const [value, setValue] = useState('');
   const [searchResults, setSearchResults] = useState<AISubstation[]>([]);
@@ -168,13 +169,46 @@ export default function SubstationAddForm({ onAdd, isSubmitting }: SubstationAdd
                     </div>
                   ))}
                 </div>
-                <button 
-                  onClick={handleBulkImport}
-                  disabled={selectedIndices.size === 0}
-                  className="w-full bg-slate-900 text-white font-black py-3 rounded-xl shadow-lg disabled:bg-slate-200 transition-all flex items-center justify-center gap-2 text-[10px] uppercase tracking-widest"
-                >
-                  <Plus className="w-4 h-4" /> Import {selectedIndices.size} selected
-                </button>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={handleBulkImport}
+                    disabled={selectedIndices.size === 0}
+                    className="flex-1 bg-slate-900 text-white font-black py-3 rounded-xl shadow-lg disabled:bg-slate-200 transition-all flex items-center justify-center gap-2 text-[10px] uppercase tracking-widest"
+                  >
+                    <Plus className="w-4 h-4" /> Import {selectedIndices.size} selected
+                  </button>
+                  
+                  {onShowCandidates && (
+                    <button 
+                      onClick={() => {
+                        const selected = searchResults.filter((_, idx) => selectedIndices.has(idx));
+                        const subs: Substation[] = selected.map((aiSub, i) => ({
+                          id: `candidate-${Date.now()}-${i}`,
+                          name: aiSub.name,
+                          address: aiSub.address,
+                          coordinates: (Array.isArray(aiSub.coordinates) && aiSub.coordinates.length >= 2) ? aiSub.coordinates : [-26.1311, 28.0536],
+                          status: 'Planned',
+                          voltageKV: aiSub.voltageKV,
+                          mvaCapacity: aiSub.mvaCapacity,
+                          capacity: aiSub.voltageKV ? `${aiSub.voltageKV}kV` : undefined
+                        }));
+                        onShowCandidates(subs.length > 0 ? subs : searchResults.map((aiSub, i) => ({
+                           id: `candidate-all-${Date.now()}-${i}`,
+                           name: aiSub.name,
+                           address: aiSub.address,
+                           coordinates: (Array.isArray(aiSub.coordinates) && aiSub.coordinates.length >= 2) ? aiSub.coordinates : [-26.1311, 28.0536],
+                           status: 'Planned',
+                           voltageKV: aiSub.voltageKV,
+                           mvaCapacity: aiSub.mvaCapacity,
+                           capacity: aiSub.voltageKV ? `${aiSub.voltageKV}kV` : undefined
+                        })));
+                      }}
+                      className="px-4 bg-indigo-50 text-indigo-600 font-black py-3 rounded-xl hover:bg-indigo-100 transition-all flex items-center justify-center gap-2 text-[10px] uppercase tracking-widest border border-indigo-100"
+                    >
+                      <Zap className="w-4 h-4" /> Preview
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>

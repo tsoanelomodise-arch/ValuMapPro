@@ -25,11 +25,7 @@ export const mockProperties: Property[] = [
     },
     financials: {
       purchasePrice: 1000000,
-      marketValue: 1476300,
-      bondAmount: 1000000,
-      deposit: 200000,
-      interestRate: 11.1,
-      termYears: 30
+      marketValue: 1476300
     },
     images: [
       'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?fit=crop&w=800&q=80',
@@ -60,11 +56,7 @@ export const mockProperties: Property[] = [
     },
     financials: {
       purchasePrice: 5500000,
-      marketValue: 6200000,
-      bondAmount: 4000000,
-      deposit: 1500000,
-      interestRate: 10.5,
-      termYears: 20
+      marketValue: 6200000
     },
     images: [
       'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?fit=crop&w=800&q=80',
@@ -94,11 +86,7 @@ export const mockProperties: Property[] = [
     },
     financials: {
       purchasePrice: 8200000,
-      marketValue: 9000000,
-      bondAmount: 6000000,
-      deposit: 2200000,
-      interestRate: 9.8,
-      termYears: 15
+      marketValue: 9000000
     },
     images: [
       'https://images.unsplash.com/photo-1553413077-190dd305871c?fit=crop&w=800&q=80',
@@ -129,11 +117,7 @@ export const mockProperties: Property[] = [
     },
     financials: {
       purchasePrice: 2800000,
-      marketValue: 3100000,
-      bondAmount: 2000000,
-      deposit: 800000,
-      interestRate: 11.1,
-      termYears: 25
+      marketValue: 3100000
     },
     images: [
       'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?fit=crop&w=800&q=80',
