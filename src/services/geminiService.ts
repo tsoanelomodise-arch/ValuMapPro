@@ -20,16 +20,36 @@ export interface AISubstation {
   mvaCapacity?: number;
 }
 
+function extractJson(text: string): string {
+  if (!text) return "";
+  
+  // Try to find JSON in code blocks
+  const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (codeBlockMatch && codeBlockMatch[1]) {
+    return codeBlockMatch[1].trim();
+  }
+  
+  // If no code blocks, try to find the first '{' and last '}'
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+  
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    return text.substring(firstBrace, lastBrace + 1).trim();
+  }
+  
+  return text.trim();
+}
+
 export async function searchSubstations(area: string): Promise<AISubstation[]> {
   const ai = getAI();
   if (!ai) return [];
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-flash-latest",
       contents: `Find 3-5 actual electrical substations in or near ${area}, South Africa.
-      Return the official name, owner/operator, address, coordinates [lat, lng], voltage (kV), capacity (MVA), and a short description.
-      Use Google Search results.`,
+      Return JSON: name, owner, address, coordinates [lat, lng], voltageKV, mvaCapacity, description.
+      Use Google Search.`,
       config: {
         responseMimeType: "application/json",
         tools: [{ googleSearch: {} }],
@@ -64,13 +84,13 @@ export async function searchSubstations(area: string): Promise<AISubstation[]> {
 
     console.log("Substation Search Response:", response);
     const text = response.text || '';
+    if (!text) {
+      console.warn("Substation Search: Gemini returned empty text.", response);
+      return [];
+    }
+
     try {
-      const jsonContent = text.includes('```json') 
-        ? text.split('```json')[1].split('```')[0].trim() 
-        : text.includes('```') 
-          ? text.split('```')[1].split('```')[0].trim()
-          : text.trim();
-          
+      const jsonContent = extractJson(text);
       const parsed = JSON.parse(jsonContent || '{"substations": []}');
       return parsed.substations || [];
     } catch (e) {
@@ -89,16 +109,9 @@ export async function searchSubstationsByArea(north: number, south: number, east
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `Find 5-10 actual electrical substations located strictly within this geographic bounding box in South Africa:
-      North: ${north}
-      South: ${south}
-      East: ${east}
-      West: ${west}
-      
-      Return the official name, owner/operator (e.g. Eskom, City of Cape Town, etc.), address, coordinates [lat, lng], voltage (kV), capacity (MVA), and a short description.
-      Ensure the coordinates are precise and inside the requested area.
-      Use Google Search results.`,
+      model: "gemini-flash-latest",
+      contents: `Find 5-10 actual electrical substations in South Africa near Latitude ${north} to ${south} and Longitude ${west} to ${east}.
+      Return JSON: name, owner (utility), address, coordinates [lat, lng], voltageKV, mvaCapacity.`,
       config: {
         responseMimeType: "application/json",
         tools: [{ googleSearch: {} }],
@@ -133,13 +146,13 @@ export async function searchSubstationsByArea(north: number, south: number, east
 
     console.log("Substation Area Discovery Response:", response);
     const text = response.text || '';
+    if (!text) {
+      console.warn("Substation Area: Gemini returned empty text.", response);
+      return [];
+    }
+
     try {
-      const jsonContent = text.includes('```json') 
-        ? text.split('```json')[1].split('```')[0].trim() 
-        : text.includes('```') 
-          ? text.split('```')[1].split('```')[0].trim()
-          : text.trim();
-          
+      const jsonContent = extractJson(text);
       const parsed = JSON.parse(jsonContent || '{"substations": []}');
       return parsed.substations || [];
     } catch (e) {
@@ -158,15 +171,22 @@ export async function searchVacantLandByArea(north: number, south: number, east:
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `Search for 5-10 actual vacant land, residential stands, or agricultural land for sale located in or near this area in South Africa:
-      Bounding Box - North: ${north}, South: ${south}, East: ${east}, West: ${west}
+      model: "gemini-flash-latest",
+      contents: `Search for 5-10 actual VACANT LAND, RESIDENTIAL STANDS, or AGRICULTURAL LAND listings for sale in South Africa.
+      Geographic Focus: Area around Latitude ${north} to ${south} and Longitude ${west} to ${east}.
       
-      Look for listings on Property24 and Private Property.
+      Look for listings on Property24 (property24.com) and Private Property (privateproperty.co.za).
       
-      Return details for each: title (name), description, listing URL, address (street, suburb, city, province), coordinates [lat, lng], stand size (m2), and price (ZAR). 
-      Important: Ensure coordinates are accurate for South Africa (lat ~ -20 to -35).
-      If no listings are found exactly inside bounds, prioritize findings in the surrounding suburbs of this region.`,
+      Return as JSON with:
+      - name: Listing title
+      - type: 'Vacant Land' or 'Agricultural'
+      - description: Brief summary
+      - p24Url: Full directo URL to the listing on Property24
+      - address: { suburb, city, province, country: 'South Africa' }
+      - coordinates: [lat, lng]
+      - financials: { purchasePrice: number in ZAR }
+      
+      Important: Ensure coordinates are accurate for the specific properties found.`,
       config: {
         responseMimeType: "application/json",
         tools: [{ googleSearch: {} }],
@@ -185,7 +205,6 @@ export async function searchVacantLandByArea(north: number, south: number, east:
                   address: {
                     type: Type.OBJECT,
                     properties: {
-                      street: { type: Type.STRING },
                       suburb: { type: Type.STRING },
                       city: { type: Type.STRING },
                       province: { type: Type.STRING },
@@ -195,20 +214,13 @@ export async function searchVacantLandByArea(north: number, south: number, east:
                   },
                   coordinates: { 
                     type: Type.ARRAY,
-                    items: { type: Type.NUMBER }
-                  },
-                  specs: {
-                    type: Type.OBJECT,
-                    properties: {
-                      standSize: { type: Type.NUMBER },
-                      titleType: { type: Type.STRING }
-                    }
+                    items: { type: Type.NUMBER },
+                    description: "[lat, lng]"
                   },
                   financials: {
                     type: Type.OBJECT,
                     properties: {
-                      purchasePrice: { type: Type.NUMBER },
-                      marketValue: { type: Type.NUMBER }
+                      purchasePrice: { type: Type.NUMBER }
                     }
                   }
                 },
@@ -225,20 +237,12 @@ export async function searchVacantLandByArea(north: number, south: number, east:
     const text = response.text || '';
     
     if (!text) {
-      console.warn("Gemini returned empty text. Candidates:", response.candidates);
-      if (response.candidates?.[0]?.finishReason) {
-        console.warn("Finish Reason:", response.candidates[0].finishReason);
-      }
+      console.warn("Gemini returned empty text for land discovery.");
+      return [];
     }
 
     try {
-      // Handle potential markdown wrapping just in case
-      const jsonContent = text.includes('```json') 
-        ? text.split('```json')[1].split('```')[0].trim() 
-        : text.includes('```') 
-          ? text.split('```')[1].split('```')[0].trim()
-          : text.trim();
-          
+      const jsonContent = extractJson(text);
       const parsed = JSON.parse(jsonContent || '{"properties": []}');
       return parsed.properties || [];
     } catch (e) {
@@ -251,16 +255,66 @@ export async function searchVacantLandByArea(north: number, south: number, east:
   }
 }
 
+export async function findLandListingLinks(north: number, south: number, east: number, west: number): Promise<string[]> {
+  const ai = getAI();
+  if (!ai) return [];
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-flash-latest",
+      contents: `Search for actual VACANT LAND, RESIDENTIAL STANDS, or AGRICULTURAL LAND listings for sale in South Africa near this area:
+      Latitude ${north} to ${south}, Longitude ${west} to ${east}.
+      
+      Find 5-10 specific listings on Property24 (property24.com) or Private Property (privateproperty.co.za).
+      
+      Return ONLY a JSON object with a 'links' array containing the full URLs or clear listing references for each property found.`,
+      config: {
+        responseMimeType: "application/json",
+        tools: [{ googleSearch: {} }],
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            links: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            }
+          },
+          required: ["links"]
+        }
+      }
+    });
+
+    console.log("Gemini Land Link Discovery Response:", response);
+    const text = response.text || '';
+    if (!text) {
+      console.warn("Gemini returned empty text for land link discovery.");
+      return [];
+    }
+    
+    try {
+      const jsonContent = extractJson(text);
+      const parsed = JSON.parse(jsonContent || '{"links": []}');
+      return parsed.links || [];
+    } catch (e) {
+      console.error("Failed to parse Gemini link discovery response:", text);
+      return [];
+    }
+  } catch (error) {
+    console.error("Error finding land links with AI:", error);
+    return [];
+  }
+}
+
 export async function importPropertyListing(input: string): Promise<Property | null> {
   const ai = getAI();
   if (!ai) return null;
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `Find and extract details for SA property: ${input}.
+      model: "gemini-flash-latest",
+      contents: `Find and extract details for South African property listing: ${input}.
       Extract to JSON: name, type, description, p24Url, agent(Listing Agent name), agentPhone, address(street, suburb, city, province, country), coordinates[lat, lng], specs(standSize, titleType), financials(price, marketValue).
-      Use Google Search results.`,
+      Use Google Search. If it's a Property24 listing, find the specific coordinates for that address.`,
       config: {
         responseMimeType: "application/json",
         tools: [{ googleSearch: {} }],
@@ -306,13 +360,13 @@ export async function importPropertyListing(input: string): Promise<Property | n
 
     console.log("Property Import Response:", response);
     const text = response.text || '';
+    if (!text) {
+      console.warn("Property Import: Gemini returned empty text.", response);
+      return null;
+    }
+
     try {
-      const jsonContent = text.includes('```json') 
-        ? text.split('```json')[1].split('```')[0].trim() 
-        : text.includes('```') 
-          ? text.split('```')[1].split('```')[0].trim()
-          : text.trim();
-          
+      const jsonContent = extractJson(text);
       return JSON.parse(jsonContent);
     } catch (e) {
       console.error("Failed to parse Gemini import response:", text);
@@ -330,10 +384,10 @@ export async function searchSubstationDetails(type: string, value: string): Prom
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-flash-latest",
       contents: `Find technical details for South African electrical substation (${type}: ${value}). 
       Need: Name, Address, Coordinates [lat, lng], Status, Voltage (kV), Capacity (MVA).
-      Use Google Search results.`,
+      Use Google Search.`,
       config: {
         responseMimeType: "application/json",
         tools: [{ googleSearch: {} }],
@@ -356,13 +410,13 @@ export async function searchSubstationDetails(type: string, value: string): Prom
 
     console.log("Substation Detail Response:", response);
     const text = response.text || '';
+    if (!text) {
+      console.warn("Substation Detail: Gemini returned empty text.", response);
+      return null;
+    }
+
     try {
-      const jsonContent = text.includes('```json') 
-        ? text.split('```json')[1].split('```')[0].trim() 
-        : text.includes('```') 
-          ? text.split('```')[1].split('```')[0].trim()
-          : text.trim();
-          
+      const jsonContent = extractJson(text);
       return JSON.parse(jsonContent);
     } catch (e) {
       console.error("Failed to parse Gemini substation details response:", text);

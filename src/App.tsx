@@ -28,6 +28,7 @@ import {
   searchSubstations, 
   searchSubstationsByArea, 
   searchVacantLandByArea, 
+  findLandListingLinks,
   importPropertyListing,
   searchSubstationDetails,
   AISubstation 
@@ -119,6 +120,7 @@ export default function App() {
   const [candidateProperties, setCandidateProperties] = useState<Property[]>([]);
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [isDiscoveringLand, setIsDiscoveringLand] = useState(false);
+  const [discoveryProgress, setDiscoveryProgress] = useState<{ current: number, total: number } | null>(null);
   const [notifications, setNotifications] = useState<{ id: string, message: string, type: 'success' | 'error' | 'info' }[]>([]);
   const discoveryAbortControllerRef = React.useRef<AbortController | null>(null);
   const importAbortControllerRef = React.useRef<AbortController | null>(null);
@@ -130,6 +132,7 @@ export default function App() {
     }
     setIsDiscovering(false);
     setIsDiscoveringLand(false);
+    setDiscoveryProgress(null);
   }, []);
 
   const handleCancelImport = useCallback(() => {
@@ -212,54 +215,76 @@ export default function App() {
     discoveryAbortControllerRef.current = controller;
 
     setIsDiscoveringLand(true);
+    setCandidateProperties([]);
+    setDiscoveryProgress({ current: 0, total: 1 }); // Start with indeterminate phase
+    
     console.log("Starting Land Discovery with bounds:", bounds);
     try {
-      const results = await searchVacantLandByArea(bounds.north, bounds.south, bounds.east, bounds.west);
-      console.log("Land Discovery Raw Results Count:", results.length);
+      // Phase 1: Find listing links
+      const links = await findLandListingLinks(bounds.north, bounds.south, bounds.east, bounds.west);
+      console.log("Land links found:", links);
       
       if (controller.signal.aborted) return;
 
-      if (!results || results.length === 0) {
-        addNotification("No vacant land discovered in this exact view. Try shifting the map or zooming out.", 'info');
+      if (!links || links.length === 0) {
+        addNotification("No vacant land listings found in this area. Try zooming out.", 'info');
         setIsDiscoveringLand(false);
+        setDiscoveryProgress(null);
         return;
       }
 
-      const newCandidates: Property[] = results.map((res, index) => {
-        // Coordinate integrity check for South Africa
-        let finalCoords = res.coordinates;
-        if (Array.isArray(finalCoords) && finalCoords.length >= 2) {
-          let [lat, lng] = finalCoords;
-          // In SA, lat is negative (~ -22 to -35) and lng is positive (~ 16 to 33)
-          // If we get [lng, lat] (e.g. [28.5, -26.1]), flip them to [-26.1, 28.5]
-          if (lat > 0 && lng < 0) {
-            finalCoords = [lng, lat];
+      setDiscoveryProgress({ current: 0, total: links.length });
+      
+      // Phase 2: Iterate and discover details one by one
+      let count = 0;
+      for (const link of links) {
+        if (controller.signal.aborted) break;
+        
+        try {
+          const res = await importPropertyListing(link);
+          if (res && !controller.signal.aborted) {
+            // Coordinate integrity check for South Africa
+            let finalCoords = res.coordinates;
+            if (Array.isArray(finalCoords) && finalCoords.length >= 2) {
+              let [lat, lng] = finalCoords;
+              // In SA, lat is negative (~ -22 to -35) and lng is positive (~ 16 to 33)
+              // If we get [lng, lat] (e.g. [28.5, -26.1]), flip them to [-26.1, 28.5]
+              if (lat > 0 && lng < 0) {
+                finalCoords = [lng, lat];
+              }
+              // If model returns positive lat by mistake e.g. [26.1, 28.5]
+              // we know for SA it MUST be negative lat.
+              else if (lat > 0 && lat < 40 && lng > 0) {
+                  finalCoords = [-lat, lng];
+              }
+            }
+
+            const newCandidate: Property = {
+              ...res,
+              id: `candidate-land-${Date.now()}-${count}`,
+              coordinates: finalCoords,
+              type: 'Agricultural', // Default to Agricultural for vacant land
+              specs: res.specs || { standSize: 1000, titleType: 'Full title' },
+              financials: {
+                purchasePrice: res.financials?.purchasePrice || 0,
+                marketValue: res.financials?.marketValue || (res.financials?.purchasePrice ? res.financials.purchasePrice * 1.1 : 1000000)
+              }
+            };
+            
+            setCandidateProperties(prev => [...prev, newCandidate]);
+            count++;
           }
-          // If model returns positive lat by mistake e.g. [26.1, 28.5]
-          // we know for SA it MUST be negative lat.
-          else if (lat > 0 && lat < 40 && lng > 0) {
-              finalCoords = [-lat, lng];
-          }
+        } catch (e) {
+          console.warn(`Failed to import property ${link}:`, e);
         }
+        
+        setDiscoveryProgress(prev => prev ? { ...prev, current: prev.current + 1 } : null);
+      }
 
-        return {
-          ...res,
-          id: `candidate-land-${Date.now()}-${index}`,
-          coordinates: finalCoords,
-          type: 'Agricultural', // Default to Agricultural for vacant land
-          specs: res.specs || { standSize: 1000, titleType: 'Full title' },
-          financials: {
-            purchasePrice: res.financials?.purchasePrice || 0,
-            marketValue: res.financials?.marketValue || (res.financials?.purchasePrice ? res.financials.purchasePrice * 1.1 : 1000000)
-          }
-        };
-      });
-
-      if (newCandidates.length > 0) {
-        setCandidateProperties(newCandidates);
-        addNotification(`Discovered ${newCandidates.length} vacant land listings.`, 'success');
-      } else {
-        addNotification("No vacant land listings found in this area.", 'info');
+      if (count > 0) {
+        addNotification(`Discovered ${count} vacant land listings.`, 'success');
+      } else if (!controller.signal.aborted) {
+        addNotification("Failed to fetch details for discovered links.", 'error');
       }
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return;
@@ -268,10 +293,11 @@ export default function App() {
     } finally {
       if (!discoveryAbortControllerRef.current || discoveryAbortControllerRef.current === controller) {
         setIsDiscoveringLand(false);
+        setDiscoveryProgress(null);
         discoveryAbortControllerRef.current = null;
       }
     }
-  }, [setProperties, addNotification]);
+  }, [addNotification]);
 
   const handleDiscoverNearby = useCallback(async (bounds: { north: number, south: number, east: number, west: number }) => {
     if (discoveryAbortControllerRef.current) {
@@ -728,9 +754,70 @@ export default function App() {
         </div>
       </main>
 
-      {isUserGuideOpen && (
+          {isUserGuideOpen && (
         <UserGuideModal onClose={() => setIsUserGuideOpen(false)} />
       )}
+
+      <AnimatePresence>
+        {discoveryProgress && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: -20, x: '-50%' }}
+            className="fixed top-8 left-1/2 z-[9999] w-full max-w-md px-6"
+          >
+            <div className="bg-slate-900/95 backdrop-blur-xl rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-white/10 p-5 ring-1 ring-white/5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                    <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 block leading-none mb-1">
+                      AI Land Discovery
+                    </span>
+                    <span className="text-xs font-bold text-white">
+                      {discoveryProgress.total === 1 ? 'Mapping Region...' : 'Harvesting Coordinates...'}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-black text-white tabular-nums">
+                    {discoveryProgress.total > 1 ? `${discoveryProgress.current}/${discoveryProgress.total}` : 'Scanning'}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden p-0.5 border border-white/5">
+                <motion.div 
+                  className="h-full bg-gradient-to-r from-blue-600 to-indigo-500 rounded-full"
+                  initial={{ width: "2%" }}
+                  animate={{ 
+                    width: discoveryProgress.total > 1 
+                      ? `${Math.max(2, (discoveryProgress.current / discoveryProgress.total) * 100)}%` 
+                      : ["2%", "40%", "2%"] 
+                  }}
+                  transition={discoveryProgress.total > 1 
+                    ? { type: "spring", bounce: 0, duration: 0.8 }
+                    : { repeat: Infinity, duration: 3, ease: "easeInOut" }
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between mt-3">
+                 <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
+                   PropScope Intelligence Grid
+                 </p>
+                 <button 
+                   onClick={handleCancelDiscovery}
+                   className="text-[9px] font-black uppercase tracking-widest text-red-400 hover:text-red-300 transition-colors"
+                 >
+                   Cancel search
+                 </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {isImportModalOpen && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6">
