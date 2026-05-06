@@ -108,6 +108,26 @@ export default function App() {
   const [hiddenPropertyIds, setHiddenPropertyIds] = usePersistedState<string[]>('propscope_hidden_properties', []);
   const [candidateSubstations, setCandidateSubstations] = useState<Substation[]>([]);
   const [isDiscovering, setIsDiscovering] = useState(false);
+  const discoveryAbortControllerRef = React.useRef<AbortController | null>(null);
+  const importAbortControllerRef = React.useRef<AbortController | null>(null);
+
+  const handleCancelDiscovery = useCallback(() => {
+    if (discoveryAbortControllerRef.current) {
+      discoveryAbortControllerRef.current.abort();
+      discoveryAbortControllerRef.current = null;
+    }
+    setIsDiscovering(false);
+  }, []);
+
+  const handleCancelImport = useCallback(() => {
+    if (importAbortControllerRef.current) {
+      importAbortControllerRef.current.abort();
+      importAbortControllerRef.current = null;
+    }
+    setIsImporting(false);
+    setIsImportModalOpen(false);
+    setIsSubstationModalOpen(false);
+  }, []);
 
   const togglePropertyVisibility = useCallback((id: string) => {
     setHiddenPropertyIds(prev => 
@@ -142,10 +162,18 @@ export default function App() {
     ), [substations, searchQuery]);
 
   const handleDiscoverNearby = useCallback(async (center: [number, number]) => {
+    if (discoveryAbortControllerRef.current) {
+      discoveryAbortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    discoveryAbortControllerRef.current = controller;
+
     setIsDiscovering(true);
     try {
       const results = await searchSubstationsByNearby(center[0], center[1]);
       
+      if (controller.signal.aborted) return;
+
       const newCandidates: Substation[] = results.map((res, index) => ({
         id: `candidate-${Date.now()}-${index}`,
         name: res.name,
@@ -172,9 +200,13 @@ export default function App() {
         alert("No new substations discovered in this immediate area.");
       }
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
       console.error("Discovery failed:", error);
     } finally {
-      setIsDiscovering(false);
+      if (!discoveryAbortControllerRef.current || discoveryAbortControllerRef.current === controller) {
+        setIsDiscovering(false);
+        discoveryAbortControllerRef.current = null;
+      }
     }
   }, [substations]);
 
@@ -203,6 +235,9 @@ export default function App() {
       return;
     }
 
+    const controller = new AbortController();
+    importAbortControllerRef.current = controller;
+
     setIsImporting(true);
     try {
       const apiKey = process.env.GEMINI_API_KEY;
@@ -215,7 +250,7 @@ export default function App() {
       const response = await ai.models.generateContent({
         model: "gemini-flash-latest",
         contents: `Find and extract details for SA property: ${importValue}.
-        Extract to JSON: name, type, description, p24Url, address(street, suburb, city, province, country), coordinates[lat, lng], specs(standSize, titleType), financials(price, marketValue).
+        Extract to JSON: name, type, description, p24Url, agent(Listing Agent name), agentPhone, address(street, suburb, city, province, country), coordinates[lat, lng], specs(standSize, titleType), financials(price, marketValue).
         Use Google Search for coordinates if needed.`,
         config: {
           responseMimeType: "application/json",
@@ -224,6 +259,8 @@ export default function App() {
             type: Type.OBJECT,
             properties: {
               name: { type: Type.STRING },
+              agent: { type: Type.STRING, description: "Listing Agent name" },
+              agentPhone: { type: Type.STRING },
               type: { type: Type.STRING, enum: ['Residential', 'Commercial', 'Industrial', 'Agricultural'] },
               description: { type: Type.STRING },
               p24Url: { type: Type.STRING, description: "The full official Property24 URL if found" },
@@ -260,6 +297,8 @@ export default function App() {
           }
         }
       });
+
+      if (controller.signal.aborted) return;
 
       const text = response.text;
       if (!text) throw new Error("AI returned no text content");
@@ -304,9 +343,13 @@ export default function App() {
       setPendingProperty(newProperty);
       setIsImportModalOpen(false);
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
       console.error("Import failed:", error);
     } finally {
-      setIsImporting(false);
+      if (!importAbortControllerRef.current || importAbortControllerRef.current === controller) {
+        setIsImporting(false);
+        importAbortControllerRef.current = null;
+      }
     }
   }, [importValue]);
 
@@ -341,6 +384,9 @@ export default function App() {
   }, [setSubstations, selectedSubstation]);
 
   const handleAddSubstation = useCallback(async (data: { type: 'address' | 'url' | 'coords' | 'direct', value: string, payload?: Substation | Substation[] }) => {
+    const controller = new AbortController();
+    importAbortControllerRef.current = controller;
+
     setIsImporting(true);
     try {
       let candidateSub: Substation | null = null;
@@ -386,6 +432,8 @@ export default function App() {
           }
         });
 
+        if (controller.signal.aborted) return;
+
         const subText = subResponse.text;
         if (!subText) throw new Error("AI returned no text content for substation");
         candidateSub = JSON.parse(subText) as Substation;
@@ -403,6 +451,8 @@ export default function App() {
         if (candidateSub) candidateSub.id = Math.random().toString(36).substr(2, 9);
       }
 
+      if (controller.signal.aborted) return;
+
       if (multipleSubs) {
         setSubstations(prev => [...multipleSubs, ...prev]);
         setIsSubstationModalOpen(false);
@@ -411,9 +461,13 @@ export default function App() {
         setIsSubstationModalOpen(false);
       }
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
       console.error("Substation add failed:", error);
     } finally {
-      setIsImporting(false);
+      if (!importAbortControllerRef.current || importAbortControllerRef.current === controller) {
+        setIsImporting(false);
+        importAbortControllerRef.current = null;
+      }
     }
   }, [setSubstations]);
 
@@ -518,6 +572,7 @@ export default function App() {
                          selectedSubstation={selectedSubstation}
                          onAddSubstation={handleAddCandidate}
                          onDiscoverNearby={handleDiscoverNearby}
+                         onCancelDiscovery={handleCancelDiscovery}
                          onClearCandidates={() => setCandidateSubstations([])}
                          isDiscovering={isDiscovering}
                          rulerActive={isRulerActive}
@@ -620,7 +675,7 @@ export default function App() {
       {isImportModalOpen && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6">
           <div 
-            onClick={() => !isImporting && setIsImportModalOpen(false)}
+            onClick={handleCancelImport}
             className="absolute inset-0 bg-slate-900/60"
           />
           <div 
@@ -638,10 +693,9 @@ export default function App() {
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (!isImporting) setIsImportModalOpen(false);
+                    handleCancelImport();
                   }} 
-                  disabled={isImporting}
-                  className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-400"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -692,7 +746,7 @@ export default function App() {
       {isSubstationModalOpen && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6">
           <div 
-            onClick={() => !isImporting && setIsSubstationModalOpen(false)}
+            onClick={handleCancelImport}
             className="absolute inset-0 bg-slate-900/60"
           />
           <div 
@@ -710,10 +764,9 @@ export default function App() {
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (!isImporting) setIsSubstationModalOpen(false);
+                    handleCancelImport();
                   }} 
-                  disabled={isImporting}
-                  className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-400"
                 >
                   <X className="w-5 h-5" />
                 </button>

@@ -140,6 +140,7 @@ interface MapComponentProps {
   selectedSubstation?: Substation | null;
   onAddSubstation?: (substation: Substation) => void;
   onDiscoverNearby?: (center: [number, number]) => void;
+  onCancelDiscovery?: () => void;
   onClearCandidates?: () => void;
   isDiscovering?: boolean;
   rulerActive: boolean;
@@ -374,6 +375,7 @@ export default function MapComponent({
   isFullscreen,
   onFullscreenChange,
   onDiscoverNearby,
+  onCancelDiscovery,
   onClearCandidates,
   isDiscovering = false
 }: MapComponentProps) {
@@ -1058,29 +1060,45 @@ export default function MapComponent({
 
         {onDiscoverNearby && (
           <div className="flex flex-col gap-2">
-            <button
-              onClick={() => {
-                if (mapInstanceRef.current) {
-                  const center = mapInstanceRef.current.getCenter();
-                  onDiscoverNearby([center.lat, center.lng]);
-                }
-              }}
-              disabled={isDiscovering}
-              className={cn(
-                "p-3 rounded-xl shadow-xl transition-all border group relative",
-                isDiscovering ? "bg-slate-100 text-slate-400 border-slate-200" : "bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 active:scale-95"
-              )}
-              title="Discover Nearby Substations"
-            >
-              <Zap className={cn("w-4 h-4", isDiscovering && "animate-pulse")} />
+            <div className="relative group flex items-center gap-2">
+              <button
+                onClick={() => {
+                  if (isDiscovering) {
+                    onCancelDiscovery?.();
+                  } else if (mapInstanceRef.current) {
+                    const center = mapInstanceRef.current.getCenter();
+                    onDiscoverNearby([center.lat, center.lng]);
+                  }
+                }}
+                className={cn(
+                  "p-3 rounded-xl shadow-xl transition-all border relative flex items-center justify-center",
+                  isDiscovering 
+                    ? "bg-amber-500 text-white border-amber-600 hover:bg-amber-600 shadow-amber-200/50" 
+                    : "bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 active:scale-95"
+                )}
+                title={isDiscovering ? "Stop Searching" : "Discover Nearby Substations"}
+              >
+                {isDiscovering ? (
+                  <X className="w-4 h-4 animate-in fade-in zoom-in duration-300" />
+                ) : (
+                  <Zap className="w-4 h-4" />
+                )}
+                
+                {isDiscovering && (
+                  <span className="absolute left-14 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-lg whitespace-nowrap shadow-2xl pointer-events-none">
+                    Searching Area...
+                  </span>
+                )}
+              </button>
+
               {isDiscovering && (
-                <span className="absolute left-14 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-lg whitespace-nowrap shadow-2xl">
-                  Searching Area...
-                </span>
+                 <div className="flex flex-col">
+                    <span className="text-[8px] font-black text-amber-600 uppercase tracking-tighter animate-pulse">Live Search</span>
+                 </div>
               )}
-            </button>
+            </div>
             
-            {onClearCandidates && candidateSubstations.length > 0 && (
+            {onClearCandidates && candidateSubstations.length > 0 && !isDiscovering && (
               <button
                 onClick={onClearCandidates}
                 className="p-3 bg-white text-slate-400 hover:text-red-500 rounded-xl shadow-xl transition-all border border-slate-200 hover:border-red-100"

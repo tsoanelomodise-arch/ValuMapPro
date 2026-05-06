@@ -80,7 +80,7 @@ export function Sidebar({
               onClick={onImportProperty}
               className="w-full flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white px-4 py-3 rounded-xl border border-white/5 text-[10px] font-bold tracking-widest uppercase transition-all"
             >
-              Import Record
+              Import P24 Property
             </button>
             <button 
               onClick={onAddSubstation}
