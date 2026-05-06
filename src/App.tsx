@@ -24,8 +24,14 @@ import {
   Check,
   Zap
 } from 'lucide-react';
-import { searchSubstations, searchSubstationsByArea, searchVacantLandByArea, AISubstation } from './services/geminiService';
-import { GoogleGenAI, Type } from "@google/genai";
+import { 
+  searchSubstations, 
+  searchSubstationsByArea, 
+  searchVacantLandByArea, 
+  importPropertyListing,
+  searchSubstationDetails,
+  AISubstation 
+} from './services/geminiService';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -110,6 +116,7 @@ export default function App() {
   const [isEditingRequested, setIsEditingRequested] = useState(false);
   const [hiddenPropertyIds, setHiddenPropertyIds] = usePersistedState<string[]>('propscope_hidden_properties', []);
   const [candidateSubstations, setCandidateSubstations] = useState<Substation[]>([]);
+  const [candidateProperties, setCandidateProperties] = useState<Property[]>([]);
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [isDiscoveringLand, setIsDiscoveringLand] = useState(false);
   const [notifications, setNotifications] = useState<{ id: string, message: string, type: 'success' | 'error' | 'info' }[]>([]);
@@ -210,20 +217,33 @@ export default function App() {
       
       if (controller.signal.aborted) return;
 
-      const newCandidates: Property[] = results.map((res, index) => ({
-        ...res,
-        id: `candidate-land-${Date.now()}-${index}`,
-        financials: {
-          ...res.financials,
-          marketValue: res.financials.purchasePrice ? res.financials.purchasePrice * 1.1 : 1000000
+      const newCandidates: Property[] = results.map((res, index) => {
+        // Coordinate integrity check for South Africa
+        let finalCoords = res.coordinates;
+        if (Array.isArray(finalCoords) && finalCoords.length >= 2) {
+          let [lat, lng] = finalCoords;
+          // In SA, lat is negative (~ -22 to -35) and lng is positive (~ 16 to 33)
+          // If we get [lng, lat], flip them
+          if (lat > 0 && lng < 0) {
+            finalCoords = [lng, lat];
+          }
         }
-      }));
+
+        return {
+          ...res,
+          id: `candidate-land-${Date.now()}-${index}`,
+          coordinates: finalCoords,
+          type: 'Agricultural', // Default to Agricultural for vacant land
+          specs: res.specs || { standSize: 1000, titleType: 'Full title' },
+          financials: {
+            purchasePrice: res.financials?.purchasePrice || 0,
+            marketValue: res.financials?.marketValue || (res.financials?.purchasePrice ? res.financials.purchasePrice * 1.1 : 1000000)
+          }
+        };
+      });
 
       if (newCandidates.length > 0) {
-        setProperties(prev => {
-          const nonCandidates = prev.filter(p => !p.id.startsWith('candidate-land-'));
-          return [...nonCandidates, ...newCandidates];
-        });
+        setCandidateProperties(newCandidates);
         addNotification(`Discovered ${newCandidates.length} vacant land listings.`, 'success');
       } else {
         addNotification("No vacant land listings found in this area.", 'info');
@@ -301,7 +321,19 @@ export default function App() {
     };
     setSubstations(prev => [...prev, newSub]);
     setCandidateSubstations(prev => prev.filter(c => c.id !== candidate.id));
-  }, [setSubstations]);
+    addNotification(`Added ${newSub.name} to infrastructure portfolio.`, 'success');
+  }, [setSubstations, addNotification]);
+
+  const handleAddCandidateProperty = useCallback((candidate: Property) => {
+    const newProp: Property = {
+      ...candidate,
+      id: `prop-${Date.now()}`
+    };
+    setProperties(prev => [...prev, newProp]);
+    setCandidateProperties(prev => prev.filter(p => p.id !== candidate.id));
+    setSelectedProperty(newProp);
+    addNotification(`Added ${newProp.name} to property portfolio.`, 'success');
+  }, [setProperties, addNotification]);
 
   const handleImport = useCallback(async () => {
     if (!importValue) return;
@@ -323,71 +355,12 @@ export default function App() {
 
     setIsImporting(true);
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error("GEMINI_API_KEY is not configured.");
-      }
+      const property = await importPropertyListing(importValue);
       
-      const ai = new GoogleGenAI({ apiKey });
-      
-      const response = await ai.models.generateContent({
-        model: "gemini-flash-latest",
-        contents: `Find and extract details for SA property: ${importValue}.
-        Extract to JSON: name, type, description, p24Url, agent(Listing Agent name), agentPhone, address(street, suburb, city, province, country), coordinates[lat, lng], specs(standSize, titleType), financials(price, marketValue).
-        Use Google Search for coordinates if needed.`,
-        config: {
-          responseMimeType: "application/json",
-          tools: [{ googleSearch: {} }],
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              agent: { type: Type.STRING, description: "Listing Agent name" },
-              agentPhone: { type: Type.STRING },
-              type: { type: Type.STRING, enum: ['Residential', 'Commercial', 'Industrial', 'Agricultural'] },
-              description: { type: Type.STRING },
-              p24Url: { type: Type.STRING, description: "The full official Property24 URL if found" },
-              address: {
-                type: Type.OBJECT,
-                properties: {
-                  street: { type: Type.STRING },
-                  suburb: { type: Type.STRING },
-                  city: { type: Type.STRING },
-                  province: { type: Type.STRING },
-                  country: { type: Type.STRING }
-                },
-                required: ["street", "suburb", "city", "province", "country"]
-              },
-              coordinates: { type: Type.ARRAY, items: { type: Type.NUMBER } },
-              specs: {
-                type: Type.OBJECT,
-                properties: {
-                  standSize: { type: Type.NUMBER },
-                  titleType: { type: Type.STRING, enum: ['Sectional title', 'Full title'] }
-                },
-                required: ["standSize", "titleType"]
-              },
-              financials: {
-                type: Type.OBJECT,
-                properties: {
-                  purchasePrice: { type: Type.NUMBER },
-                  marketValue: { type: Type.NUMBER }
-                },
-                required: ["purchasePrice", "marketValue"]
-              }
-            },
-            required: ["name", "type", "address", "coordinates", "specs", "financials"]
-          }
-        }
-      });
-
       if (controller.signal.aborted) return;
-
-      const text = response.text;
-      if (!text) throw new Error("AI returned no text content");
+      if (!property) throw new Error("AI failed to extract property details.");
       
-      const rawData = JSON.parse(text);
-      const newProperty = rawData as Property;
+      const newProperty = property;
       
       // Coordinate integrity check and auto-correction for South Africa
       // Leaflet expects [lat, lng]. If we get [lng, lat], we flip them.
@@ -483,47 +456,16 @@ export default function App() {
           candidateSub.id = Math.random().toString(36).substr(2, 9);
         }
       } else {
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) {
-          alert("GEMINI_API_KEY is not configured.");
-          return;
-        }
-
-        const ai = new GoogleGenAI({ apiKey });
-        
-        const subResponse = await ai.models.generateContent({
-          model: "gemini-flash-latest",
-          contents: `Find tech details for SA substation (${data.type}: ${data.value}). 
-          Need: Name, Address, Coordinates [lat, lng], Status, Volt (kV), Capacity (MVA).`,
-          config: {
-            responseMimeType: "application/json",
-            tools: [{ googleSearch: {} }],
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                name: { type: Type.STRING },
-                address: { type: Type.STRING },
-                coordinates: { type: Type.ARRAY, items: { type: Type.NUMBER } },
-                status: { type: Type.STRING, enum: ['Active', 'Under Maintenance', 'Planned'] },
-                capacity: { type: Type.STRING },
-                voltageKV: { type: Type.NUMBER },
-                mvaCapacity: { type: Type.NUMBER },
-                googleMapsUrl: { type: Type.STRING }
-              },
-              required: ["name", "address", "coordinates", "status"]
-            }
-          }
-        });
+        const result = await searchSubstationDetails(data.type, data.value);
 
         if (controller.signal.aborted) return;
-
-        const subText = subResponse.text;
-        if (!subText) throw new Error("AI returned no text content for substation");
-        candidateSub = JSON.parse(subText) as Substation;
+        if (!result) throw new Error("AI failed to extract substation details.");
         
+        candidateSub = result;
+
         // Coordinate integrity check
-        if (!candidateSub || !candidateSub.coordinates || !Array.isArray(candidateSub.coordinates) || candidateSub.coordinates.length < 2 || isNaN(candidateSub.coordinates[0]) || isNaN(candidateSub.coordinates[1])) {
-          if (candidateSub) candidateSub.coordinates = [-26.1311, 28.0536];
+        if (!candidateSub.coordinates || !Array.isArray(candidateSub.coordinates) || candidateSub.coordinates.length < 2 || isNaN(candidateSub.coordinates[0]) || isNaN(candidateSub.coordinates[1])) {
+          candidateSub.coordinates = [-26.1311, 28.0536];
         } else {
           let [lat, lng] = candidateSub.coordinates;
           if (lat > 0 && lng < 0) {
@@ -531,13 +473,13 @@ export default function App() {
           }
         }
 
-        if (candidateSub) candidateSub.id = Math.random().toString(36).substr(2, 9);
+        candidateSub.id = Math.random().toString(36).substr(2, 9);
       }
 
       if (controller.signal.aborted) return;
 
       if (multipleSubs) {
-        setSubstations(prev => [...multipleSubs, ...prev]);
+        setSubstations(prev => [...multipleSubs!, ...prev]);
         setIsSubstationModalOpen(false);
       } else if (candidateSub) {
         setPendingSubstation(candidateSub);
@@ -649,17 +591,19 @@ export default function App() {
                          properties={filteredProperties.filter(p => !hiddenPropertyIds.includes(p.id))} 
                          substations={filteredSubstations}
                          candidateSubstations={candidateSubstations}
+                         candidateProperties={candidateProperties}
                          onSelectProperty={handleSelectProperty} 
                          selectedProperty={selectedProperty}
                          onSelectSubstation={handleSelectSubstation}
                          selectedSubstation={selectedSubstation}
                          onAddSubstation={handleAddCandidate}
+                         onAddProperty={handleAddCandidateProperty}
                          onDiscoverNearby={handleDiscoverNearby}
                          onDiscoverLand={handleDiscoverLand}
                          onCancelDiscovery={handleCancelDiscovery}
                          onClearCandidates={() => {
                            setCandidateSubstations([]);
-                           setProperties(prev => prev.filter(p => !p.id.startsWith('candidate-land-')));
+                           setCandidateProperties([]);
                          }}
                          isDiscovering={isDiscovering}
                          isDiscoveringLand={isDiscoveringLand}

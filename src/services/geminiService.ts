@@ -1,10 +1,10 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { Property } from "../types";
+import { Property, Substation } from "../types";
 
 const getAI = () => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    console.warn("GEMINI_API_KEY is not defined in the environment.");
+    console.warn("GEMINI_API_KEY is not defined. The AI Guided Search might not work in some environments unless configured.");
     return null;
   }
   return new GoogleGenAI({ apiKey });
@@ -62,7 +62,7 @@ export async function searchSubstations(area: string): Promise<AISubstation[]> {
       }
     });
 
-    const text = response.text;
+    const text = response.text || '';
     return JSON.parse(text || '{"substations": []}').substations || [];
   } catch (error) {
     console.error("Error searching substations with AI:", error);
@@ -118,7 +118,7 @@ export async function searchSubstationsByArea(north: number, south: number, east
       }
     });
 
-    const text = response.text;
+    const text = response.text || '';
     return JSON.parse(text || '{"substations": []}').substations || [];
   } catch (error) {
     console.error("Error discovering substations in area with AI:", error);
@@ -133,7 +133,7 @@ export async function searchVacantLandByArea(north: number, south: number, east:
   try {
     const response = await ai.models.generateContent({
       model: "gemini-flash-latest",
-      contents: `Find 5-10 actual vacant land / residential agricultural land for sale listings strictly within this geographic bounding box in South Africa from Property24 or similar:
+      contents: `Find 5-10 actual vacant land / residential agricultural land for sale listings strictly within this geographic bounding box in South Africa (e.g. from Property24, Private Property):
       North: ${north}
       South: ${south}
       East: ${east}
@@ -141,7 +141,7 @@ export async function searchVacantLandByArea(north: number, south: number, east:
       
       Return the property details: name (title), type (always 'Vacant Land'), description, p24Url, address (street, suburb, city, province, country), coordinates [lat, lng], standSize (m2), and price (ZAR).
       Ensure the coordinates are precise and inside the requested area.
-      Use Google Search results.`,
+      Use Google Search results. If no listings are found exactly in bounds, check the outer suburb.`,
       config: {
         responseMimeType: "application/json",
         tools: [{ googleSearch: {} }],
@@ -184,10 +184,11 @@ export async function searchVacantLandByArea(north: number, south: number, east:
                     properties: {
                       purchasePrice: { type: Type.NUMBER },
                       marketValue: { type: Type.NUMBER }
-                    }
+                    },
+                    required: ["purchasePrice"]
                   }
                 },
-                required: ["name", "address", "coordinates", "p24Url"]
+                required: ["name", "address", "coordinates", "p24Url", "financials"]
               }
             }
           },
@@ -196,10 +197,144 @@ export async function searchVacantLandByArea(north: number, south: number, east:
       }
     });
 
-    const text = response.text;
-    return JSON.parse(text || '{"properties": []}').properties || [];
+    const text = response.text || '';
+    try {
+      // Handle potential markdown wrapping just in case
+      const jsonContent = text.includes('```json') 
+        ? text.split('```json')[1].split('```')[0].trim() 
+        : text.includes('```') 
+          ? text.split('```')[1].split('```')[0].trim()
+          : text.trim();
+          
+      const parsed = JSON.parse(jsonContent || '{"properties": []}');
+      return parsed.properties || [];
+    } catch (e) {
+      console.error("Failed to parse Gemini discovery response:", text);
+      return [];
+    }
   } catch (error) {
     console.error("Error discovering vacant land in area with AI:", error);
     return [];
+  }
+}
+
+export async function importPropertyListing(input: string): Promise<Property | null> {
+  const ai = getAI();
+  if (!ai) return null;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-flash-latest",
+      contents: `Find and extract details for SA property: ${input}.
+      Extract to JSON: name, type, description, p24Url, agent(Listing Agent name), agentPhone, address(street, suburb, city, province, country), coordinates[lat, lng], specs(standSize, titleType), financials(price, marketValue).
+      Use Google Search results.`,
+      config: {
+        responseMimeType: "application/json",
+        tools: [{ googleSearch: {} }],
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            name: { type: Type.STRING },
+            agent: { type: Type.STRING },
+            agentPhone: { type: Type.STRING },
+            type: { type: Type.STRING, enum: ['Residential', 'Commercial', 'Industrial', 'Agricultural'] },
+            description: { type: Type.STRING },
+            p24Url: { type: Type.STRING },
+            address: {
+              type: Type.OBJECT,
+              properties: {
+                street: { type: Type.STRING },
+                suburb: { type: Type.STRING },
+                city: { type: Type.STRING },
+                province: { type: Type.STRING },
+                country: { type: Type.STRING }
+              }
+            },
+            coordinates: { type: Type.ARRAY, items: { type: Type.NUMBER } },
+            specs: {
+              type: Type.OBJECT,
+              properties: {
+                standSize: { type: Type.NUMBER },
+                titleType: { type: Type.STRING, enum: ['Sectional title', 'Full title'] }
+              }
+            },
+            financials: {
+              type: Type.OBJECT,
+              properties: {
+                purchasePrice: { type: Type.NUMBER },
+                marketValue: { type: Type.NUMBER }
+              }
+            }
+          },
+          required: ["name", "type", "address", "coordinates"]
+        }
+      }
+    });
+
+    const text = response.text || '';
+    try {
+      const jsonContent = text.includes('```json') 
+        ? text.split('```json')[1].split('```')[0].trim() 
+        : text.includes('```') 
+          ? text.split('```')[1].split('```')[0].trim()
+          : text.trim();
+          
+      return JSON.parse(jsonContent);
+    } catch (e) {
+      console.error("Failed to parse Gemini import response:", text);
+      return null;
+    }
+  } catch (error) {
+    console.error("Error importing property with AI:", error);
+    return null;
+  }
+}
+
+export async function searchSubstationDetails(type: string, value: string): Promise<Substation | null> {
+  const ai = getAI();
+  if (!ai) return null;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-flash-latest",
+      contents: `Find technical details for South African electrical substation (${type}: ${value}). 
+      Need: Name, Address, Coordinates [lat, lng], Status, Voltage (kV), Capacity (MVA).
+      Use Google Search results.`,
+      config: {
+        responseMimeType: "application/json",
+        tools: [{ googleSearch: {} }],
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            name: { type: Type.STRING },
+            address: { type: Type.STRING },
+            coordinates: { type: Type.ARRAY, items: { type: Type.NUMBER } },
+            status: { type: Type.STRING, enum: ['Active', 'Under Maintenance', 'Planned'] },
+            capacity: { type: Type.STRING },
+            voltageKV: { type: Type.NUMBER },
+            mvaCapacity: { type: Type.NUMBER },
+            googleMapsUrl: { type: Type.STRING }
+          },
+          required: ["name", "address", "coordinates", "status"]
+        }
+      }
+    });
+
+    const text = response.text || '';
+    try {
+      const jsonContent = text.includes('```json') 
+        ? text.split('```json')[1].split('```')[0].trim() 
+        : text.includes('```') 
+          ? text.split('```')[1].split('```')[0].trim()
+          : text.trim();
+          
+      return JSON.parse(jsonContent);
+    } catch (e) {
+      console.error("Failed to parse Gemini substation details response:", text);
+      return null;
+    }
+  } catch (error) {
+    console.error("Error searching substation details with AI:", error);
+    return null;
   }
 }

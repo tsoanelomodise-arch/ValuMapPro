@@ -17,7 +17,11 @@ import {
   Map as MapIcon,
   ExternalLink,
   FileDown,
-  Mountain
+  Mountain,
+  Settings2,
+  ListFilter,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { cn, calculateDistance } from '../../lib/utils';
 import MapDetailsOverlay from './MapDetailsOverlay';
@@ -26,6 +30,15 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
 const CLASSIC_RED = '#EA4335';
+
+const ESRI_BASEMAPS = [
+  { id: 'streets', name: 'Streets', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', attribution: '&copy; Esri' },
+  { id: 'satellite', name: 'Satellite', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attribution: '&copy; Esri' },
+  { id: 'topo', name: 'Topographic', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', attribution: '&copy; Esri' },
+  { id: 'gray', name: 'Light Gray', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', attribution: '&copy; Esri' },
+  { id: 'dark-gray', name: 'Dark Gray', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', attribution: '&copy; Esri' },
+  { id: 'natgeo', name: 'National Geographic', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}', attribution: '&copy; Esri' },
+];
 
 // Custom component to integrate esri-leaflet with react-leaflet
 function EsriLayer({ 
@@ -135,11 +148,13 @@ interface MapComponentProps {
   properties: Property[];
   substations?: Substation[];
   candidateSubstations?: Substation[];
+  candidateProperties?: Property[];
   onSelectProperty: (property: Property) => void;
   selectedProperty: Property | null;
   onSelectSubstation?: (substation: Substation) => void;
   selectedSubstation?: Substation | null;
   onAddSubstation?: (substation: Substation) => void;
+  onAddProperty?: (property: Property) => void;
   onDiscoverNearby?: (bounds: { north: number, south: number, east: number, west: number }) => void;
   onDiscoverLand?: (bounds: { north: number, south: number, east: number, west: number }) => void;
   onCancelDiscovery?: () => void;
@@ -226,13 +241,13 @@ const createColoredIcon = (color: string, isSelected: boolean = false, label?: s
   });
 };
 
-const createCandidateIcon = (isSelected: boolean = false, label?: string) => {
+const createCandidateIcon = (isSelected: boolean = false, label?: string, isProperty: boolean = false) => {
   const width = isSelected ? 28 : 20;
   const height = width * 1.4;
-  const color = '#94a3b8'; // Slate 400 for candidates
+  const color = isProperty ? '#10b981' : '#94a3b8'; // Emerald 500 for land, Slate 400 for stations
   
   return L.divIcon({
-    className: 'custom-div-icon candidate-icon',
+    className: `custom-div-icon candidate-icon ${isProperty ? 'property-candidate' : 'station-candidate'}`,
     html: `
       <div class="relative flex flex-col items-center">
         <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-lg opacity-80">
@@ -241,7 +256,7 @@ const createCandidateIcon = (isSelected: boolean = false, label?: string) => {
         </svg>
         ${label ? `
           <div class="mt-0.5 px-1 py-0 select-none">
-              <span class="text-[7px] font-bold text-slate-400 uppercase whitespace-nowrap leading-none">${label}</span>
+              <span class="text-[7px] font-bold ${isProperty ? 'text-emerald-600' : 'text-slate-400'} uppercase whitespace-nowrap leading-none drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]">${label}</span>
           </div>
         ` : ''}
       </div>
@@ -273,6 +288,56 @@ const SubstationLayerGroup = React.memo(({ substations, onSelect, selectedId }: 
               </div>
               <p className="text-[10px] text-slate-500 m-0 uppercase font-bold tracking-widest">{substation.status}</p>
               <p className="text-[11px] text-slate-400 m-0 mt-2 italic">{substation.address}</p>
+            </div>
+          </Popup>
+        </Marker>
+      ))}
+    </>
+  );
+});
+
+// Memoized Candidate Property Markers
+const CandidatePropertyLayerGroup = React.memo(({ properties, onAdd }: { properties: Property[], onAdd?: (p: Property) => void }) => {
+  return (
+    <>
+      {properties.map(property => (
+        <Marker
+          key={`candidate-prop-${property.id}`}
+          position={property.coordinates as [number, number]}
+          icon={createCandidateIcon(false, property.name, true)}
+          zIndexOffset={500}
+        >
+          <Popup>
+            <div className="p-3 min-w-[200px]">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-6 h-6 rounded-lg bg-emerald-50 flex items-center justify-center">
+                  <Mountain className="w-3.5 h-3.5 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="font-black text-xs m-0 text-slate-900 uppercase tracking-tight leading-none">{property.name}</p>
+                  <p className="text-[8px] text-emerald-600 m-0 uppercase font-bold tracking-[0.1em] mt-1">Found Listing</p>
+                </div>
+              </div>
+              
+              <div className="space-y-1.5 mb-4">
+                <p className="text-[10px] text-slate-500 m-0 leading-relaxed italic">{property.address.street}, {property.address.suburb}</p>
+                {property.financials?.purchasePrice && (
+                  <p className="text-[9px] font-black text-slate-700 bg-slate-50 px-1.5 py-0.5 rounded inline-block">
+                    R {(property.financials.purchasePrice / 1000000).toFixed(1)}M
+                  </p>
+                )}
+              </div>
+
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAdd?.(property);
+                }}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 group"
+              >
+                <Check className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                Confirm & Import
+              </button>
             </div>
           </Popup>
         </Marker>
@@ -322,7 +387,7 @@ const CandidateSubstationLayerGroup = React.memo(({
           key={`candidate-${substation.id}`}
           position={substation.coordinates}
           icon={createCandidateIcon(selectedId === substation.id, substation.name)}
-          zIndexOffset={selectedId === substation.id ? 900 : -100}
+          zIndexOffset={selectedId === substation.id ? 900 : 400}
         >
           <Popup>
             <div className="p-3 min-w-[180px]">
@@ -369,11 +434,13 @@ export default function MapComponent({
   properties, 
   substations = [],
   candidateSubstations = [],
+  candidateProperties = [],
   onSelectProperty, 
   selectedProperty,
   onSelectSubstation,
   selectedSubstation,
   onAddSubstation,
+  onAddProperty,
   rulerActive,
   onRulerActiveChange,
   onOpenDetails,
@@ -392,7 +459,13 @@ export default function MapComponent({
   const [distance, setDistance] = useState<number | null>(null);
   const [showBoundaries, setShowBoundaries] = useState(true);
   const [showStructures, setShowStructures] = useState(false);
-  const [mapType, setMapType] = useState<'street' | 'satellite'>('street');
+  const [selectedBasemapId, setSelectedBasemapId] = useState('streets');
+  const [isLayerPanelOpen, setIsLayerPanelOpen] = useState(false);
+  const [layerOpacities, setLayerOpacities] = useState({
+    base: 1.0,
+    cadastre: 0.8,
+    buildings: 0.5
+  });
   const [isSelectingForExport, setIsSelectingForExport] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -870,47 +943,58 @@ export default function MapComponent({
         }}
       >
         <MapResizeHandler />
-        <LayersControl position="topright">
-          <LayersControl.BaseLayer checked={mapType === 'street'} name="Street View">
-            <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution='&copy; OpenStreetMap contributors'
-              crossOrigin="anonymous"
-            />
-          </LayersControl.BaseLayer>
-          
-          <LayersControl.BaseLayer checked={mapType === 'satellite'} name="Satellite View">
-            <TileLayer
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-              attribution='&copy; Esri'
-              crossOrigin="anonymous"
-            />
-          </LayersControl.BaseLayer>
-
-          <LayersControl.Overlay checked={showBoundaries} name="Property Boundaries (National)">
-            <LayerGroup />
-          </LayersControl.Overlay>
-
-          <LayersControl.Overlay checked={showStructures} name="Building Structures">
-            <LayerGroup />
-          </LayersControl.Overlay>
-        </LayersControl>
-
-        <EsriLayer
-          url="https://maps.geoscience.org.za/arcgis/rest/services/Cadastre/MapServer"
-          layers={[0, 1, 2, 3, 4]}
-          opacity={0.8}
-          visible={showBoundaries}
-          name="Cadastral"
+    <LayersControl position="topright">
+      <LayersControl.BaseLayer checked={selectedBasemapId === 'streets'} name="Standard Streets">
+        <TileLayer
+          url={ESRI_BASEMAPS.find(b => b.id === 'streets')?.url || ""}
+          attribution={ESRI_BASEMAPS.find(b => b.id === 'streets')?.attribution}
+          opacity={layerOpacities.base}
+          crossOrigin="anonymous"
         />
-
-        <EsriLayer
-          url="https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/MS_Building_Footprints_South_Africa/MapServer"
-          type="tiled"
-          opacity={0.5}
-          visible={showStructures}
-          name="Buildings"
+      </LayersControl.BaseLayer>
+      
+      <LayersControl.BaseLayer checked={selectedBasemapId === 'satellite'} name="Imagery / Satellite">
+        <TileLayer
+          url={ESRI_BASEMAPS.find(b => b.id === 'satellite')?.url || ""}
+          attribution={ESRI_BASEMAPS.find(b => b.id === 'satellite')?.attribution}
+          opacity={layerOpacities.base}
+          crossOrigin="anonymous"
         />
+      </LayersControl.BaseLayer>
+
+      <LayersControl.BaseLayer checked={selectedBasemapId === 'topo'} name="Topographic">
+        <TileLayer
+          url={ESRI_BASEMAPS.find(b => b.id === 'topo')?.url || ""}
+          attribution={ESRI_BASEMAPS.find(b => b.id === 'topo')?.attribution}
+          opacity={layerOpacities.base}
+          crossOrigin="anonymous"
+        />
+      </LayersControl.BaseLayer>
+
+      <LayersControl.Overlay checked={showBoundaries} name="Property Boundaries (National)">
+        <LayerGroup />
+      </LayersControl.Overlay>
+
+      <LayersControl.Overlay checked={showStructures} name="Building Structures">
+        <LayerGroup />
+      </LayersControl.Overlay>
+    </LayersControl>
+
+    <EsriLayer
+      url="https://maps.geoscience.org.za/arcgis/rest/services/Cadastre/MapServer"
+      layers={[0, 1, 2, 3, 4]}
+      opacity={layerOpacities.cadastre}
+      visible={showBoundaries}
+      name="Cadastral"
+    />
+
+    <EsriLayer
+      url="https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/MS_Building_Footprints_South_Africa/MapServer"
+      type="tiled"
+      opacity={layerOpacities.buildings}
+      visible={showStructures}
+      name="Buildings"
+    />
 
         <MapController center={targetCenter} rulerActive={rulerActive} />
 
@@ -942,6 +1026,11 @@ export default function MapComponent({
         <CandidateSubstationLayerGroup 
           substations={candidateSubstations} 
           onAdd={onAddSubstation} 
+        />
+
+        <CandidatePropertyLayerGroup 
+          properties={candidateProperties}
+          onAdd={onAddProperty}
         />
 
         {rulerPoints.map((point, idx) => (
@@ -1003,37 +1092,139 @@ export default function MapComponent({
 
       <div className="absolute top-4 left-4 z-[1000] flex flex-col gap-2" data-html2canvas-ignore="true">
         <button
-          onClick={() => setMapType(mapType === 'street' ? 'satellite' : 'street')}
+          onClick={() => setSelectedBasemapId(selectedBasemapId === 'satellite' ? 'streets' : 'satellite')}
           className={cn(
             "p-3 rounded-xl shadow-xl transition-all border",
-            mapType === 'satellite' ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+            selectedBasemapId === 'satellite' ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
           )}
-          title="Toggle Satellite View"
+          title="Quick Toggle Satellite"
         >
           <MapIcon className="w-4 h-4" />
         </button>
 
         <button
-          onClick={() => setShowBoundaries(!showBoundaries)}
+          onClick={() => setIsLayerPanelOpen(!isLayerPanelOpen)}
           className={cn(
             "p-3 rounded-xl shadow-xl transition-all border",
-            showBoundaries ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+            isLayerPanelOpen ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
           )}
-          title="Toggle Property Boundaries"
+          title="Map Layer Settings"
         >
-          <Layers className="w-4 h-4" />
+          <Settings2 className="w-4 h-4" />
         </button>
 
-        <button
-          onClick={() => setShowStructures(!showStructures)}
-          className={cn(
-            "p-3 rounded-xl shadow-xl transition-all border",
-            showStructures ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-          )}
-          title="Toggle Building Structures"
-        >
-          <Home className="w-4 h-4" />
-        </button>
+        {isLayerPanelOpen && (
+          <div className="absolute left-16 top-0 w-80 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in slide-in-from-left-2 duration-300">
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-indigo-400" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Map Layer Controller</span>
+              </div>
+              <button 
+                onClick={() => setIsLayerPanelOpen(false)}
+                className="p-1 hover:bg-white/20 rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+              {/* Basemap Selection */}
+              <section>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 block">Esri Base Maps</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {ESRI_BASEMAPS.map(basemap => (
+                    <button
+                      key={basemap.id}
+                      onClick={() => setSelectedBasemapId(basemap.id)}
+                      className={cn(
+                        "px-3 py-2.5 rounded-xl text-[10px] font-bold transition-all border text-left",
+                        selectedBasemapId === basemap.id 
+                          ? "bg-slate-900 text-white border-slate-900 shadow-lg shadow-slate-200" 
+                          : "bg-slate-50 text-slate-600 border-slate-100 hover:border-slate-300"
+                      )}
+                    >
+                      {basemap.name}
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              {/* Opacity Controls */}
+              <section className="space-y-4">
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Layer Intensity (Opacity)</label>
+                
+                <div className="space-y-3">
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Base Tiles</span>
+                      <span className="text-[10px] font-black text-indigo-600">{Math.round(layerOpacities.base * 100)}%</span>
+                    </div>
+                    <input 
+                      type="range" min="0" max="1" step="0.05"
+                      value={layerOpacities.base}
+                      onChange={(e) => setLayerOpacities(prev => ({ ...prev, base: parseFloat(e.target.value) }))}
+                      className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    />
+                  </div>
+
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Cadastral / Boundaries</span>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => setShowBoundaries(!showBoundaries)}
+                          className={cn("p-1 rounded-md", showBoundaries ? "text-indigo-600" : "text-slate-400")}
+                        >
+                          {showBoundaries ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                        </button>
+                        <span className="text-[10px] font-black text-indigo-600">{Math.round(layerOpacities.cadastre * 100)}%</span>
+                      </div>
+                    </div>
+                    <input 
+                      type="range" min="0" max="1" step="0.05"
+                      value={layerOpacities.cadastre}
+                      onChange={(e) => setLayerOpacities(prev => ({ ...prev, cadastre: parseFloat(e.target.value) }))}
+                      className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    />
+                  </div>
+
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Building Footprints</span>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => setShowStructures(!showStructures)}
+                          className={cn("p-1 rounded-md", showStructures ? "text-indigo-600" : "text-slate-400")}
+                        >
+                          {showStructures ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                        </button>
+                        <span className="text-[10px] font-black text-indigo-600">{Math.round(layerOpacities.buildings * 100)}%</span>
+                      </div>
+                    </div>
+                    <input 
+                      type="range" min="0" max="1" step="0.05"
+                      value={layerOpacities.buildings}
+                      onChange={(e) => setLayerOpacities(prev => ({ ...prev, buildings: parseFloat(e.target.value) }))}
+                      className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    />
+                  </div>
+                </div>
+              </section>
+
+              <div className="pt-2">
+                <button 
+                  onClick={() => setLayerOpacities({ base: 1.0, cadastre: 0.8, buildings: 0.5 })}
+                  className="w-full py-2.5 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  Reset to Defaults
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="h-px w-full bg-slate-100 my-1" />
 
         <button
           onClick={() => onRulerActiveChange(!rulerActive)}
@@ -1157,7 +1348,7 @@ export default function MapComponent({
               </div>
             )}
             
-            {onClearCandidates && (candidateSubstations.length > 0 || (properties.some(p => p.id.startsWith('candidate-land-')))) && !isDiscovering && !isDiscoveringLand && (
+            {onClearCandidates && (candidateSubstations.length > 0 || candidateProperties.length > 0) && !isDiscovering && !isDiscoveringLand && (
               <button
                 onClick={onClearCandidates}
                 className="p-3 bg-white text-slate-400 hover:text-red-500 rounded-xl shadow-xl transition-all border border-slate-200 hover:border-red-100"
