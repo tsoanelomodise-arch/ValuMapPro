@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Property, PROPERTY_TYPE_COLORS } from '../../types';
 import { formatCurrency } from '../../lib/utils';
-import { MapPin, Ruler, Scaling, ArrowUpRight, Trash2, Edit3 } from 'lucide-react';
+import { MapPin, Ruler, Scaling, ArrowUpRight, Trash2, Edit3, Search } from 'lucide-react';
 
 interface ListViewProps {
   properties: Property[];
@@ -13,6 +13,8 @@ interface ListViewProps {
   selectedProperty?: Property | null;
   onDeleteProperty?: (id: string) => void;
   onDeleteMultipleProperties?: (ids: string[]) => void;
+  searchQuery?: string;
+  setSearchQuery?: (query: string) => void;
 }
 
 export default function ListView({ 
@@ -24,7 +26,9 @@ export default function ListView({
   onEditProperty, 
   selectedProperty, 
   onDeleteProperty,
-  onDeleteMultipleProperties
+  onDeleteMultipleProperties,
+  searchQuery = '',
+  setSearchQuery
 }: ListViewProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -56,6 +60,22 @@ export default function ListView({
 
   return (
     <div className="flex flex-col h-full gap-4">
+      <div className="flex items-center justify-between gap-4">
+        <div className="relative max-w-sm w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <input 
+            type="text" 
+            placeholder="Search properties..." 
+            className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 font-bold uppercase tracking-widest outline-none transition-all shadow-sm"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery?.(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-white px-4 py-2 rounded-xl border border-slate-100 shadow-sm">
+          <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+          {properties.length} Results Found
+        </div>
+      </div>
       {selectedIds.size > 0 && (
         <div className="flex items-center justify-between bg-slate-900 px-6 py-3 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300">
           <div className="flex items-center gap-3">

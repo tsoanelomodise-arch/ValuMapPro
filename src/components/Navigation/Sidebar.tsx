@@ -6,7 +6,8 @@ import {
   PieChart, 
   Settings, 
   User,
-  Zap 
+  Zap,
+  Info 
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -19,6 +20,7 @@ interface SidebarProps {
   onImportProperty: () => void;
   onAddSubstation: () => void;
   onRestoreDefaults: () => void;
+  onShowUserGuide: () => void;
 }
 
 export function Sidebar({ 
@@ -29,7 +31,8 @@ export function Sidebar({
   onCategoryChange, 
   onImportProperty, 
   onAddSubstation, 
-  onRestoreDefaults 
+  onRestoreDefaults,
+  onShowUserGuide 
 }: SidebarProps) {
   return (
     <aside className={cn(
@@ -91,7 +94,13 @@ export function Sidebar({
         </div>
       </nav>
 
-      <div className="p-4 border-t border-white/5">
+      <div className="p-4 border-t border-white/5 space-y-2">
+        <SidebarLink 
+          icon={<Info />} 
+          label="Guide" 
+          onClick={onShowUserGuide} 
+          isOpen={isOpen}
+        />
         <SidebarLink 
           icon={<Settings />} 
           label="Reset" 

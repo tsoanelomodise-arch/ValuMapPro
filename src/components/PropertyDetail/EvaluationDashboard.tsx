@@ -26,6 +26,7 @@ interface EvaluationDashboardProps {
   substations?: Substation[];
   onDeleteProperty?: (id: string) => void;
   onUpdateProperty?: (property: Property) => void;
+  onAddCandidate?: (property: Property) => void;
   initialEditMode?: boolean;
 }
 
@@ -34,6 +35,7 @@ export default function EvaluationDashboard({
   substations = [], 
   onDeleteProperty, 
   onUpdateProperty, 
+  onAddCandidate,
   initialEditMode = false 
 }: EvaluationDashboardProps) {
   const [isEditing, setIsEditing] = useState(initialEditMode);
@@ -207,9 +209,19 @@ export default function EvaluationDashboard({
                       <button onClick={handleCancel} className="px-4 py-2 bg-white border border-slate-200 text-slate-500 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 transition-all">Cancel</button>
                     </>
                  ) : (
-                    <button onClick={() => setIsEditing(true)} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2">
-                       <Edit3 className="w-3.5 h-3.5" /> Edit Record
-                    </button>
+                    <>
+                       {property.id.startsWith('candidate-land-') && (
+                          <button 
+                            onClick={() => onAddCandidate?.(property)}
+                            className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg active:scale-95"
+                          >
+                            <Zap className="w-3 h-3" /> Add to Portfolio
+                          </button>
+                       )}
+                       <button onClick={() => setIsEditing(true)} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2">
+                          <Edit3 className="w-3.5 h-3.5" /> Edit Record
+                       </button>
+                    </>
                  )}
               </div>
            </div>
@@ -291,7 +303,10 @@ export default function EvaluationDashboard({
               <div className="flex flex-col md:flex-row gap-8">
                  <div className="flex-1">
                     <h3 className="text-xl font-bold text-slate-900">{closestSubstation.substation.name}</h3>
-                    <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider">{closestSubstation.substation.status} • {closestSubstation.substation.capacity}</p>
+                    <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider">
+                      {closestSubstation.substation.owner ? `${closestSubstation.substation.owner} • ` : ''}
+                      {closestSubstation.substation.status} • {closestSubstation.substation.capacity}
+                    </p>
                  </div>
                  <div className="flex gap-12">
                     <div>

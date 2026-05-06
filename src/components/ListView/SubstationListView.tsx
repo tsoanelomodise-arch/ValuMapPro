@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Substation, SUBSTATION_COLOR } from '../../types';
-import { MapPin, ArrowUpRight, Trash2, Battery, Zap, Activity, Edit3 } from 'lucide-react';
+import { MapPin, ArrowUpRight, Trash2, Battery, Zap, Activity, Edit3, Search } from 'lucide-react';
 
 interface SubstationListViewProps {
   substations: Substation[];
@@ -8,6 +8,8 @@ interface SubstationListViewProps {
   selectedSubstation?: Substation | null;
   onDeleteSubstation?: (id: string) => void;
   onEditSubstation?: (substation: Substation) => void;
+  searchQuery?: string;
+  setSearchQuery?: (query: string) => void;
 }
 
 export default function SubstationListView({ 
@@ -15,10 +17,28 @@ export default function SubstationListView({
   onSelectSubstation, 
   selectedSubstation, 
   onDeleteSubstation,
-  onEditSubstation
+  onEditSubstation,
+  searchQuery = '',
+  setSearchQuery
 }: SubstationListViewProps) {
   return (
     <div className="flex flex-col h-full gap-4">
+      <div className="flex items-center justify-between gap-4">
+        <div className="relative max-w-sm w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <input 
+            type="text" 
+            placeholder="Search substations..." 
+            className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 font-bold uppercase tracking-widest outline-none transition-all shadow-sm"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery?.(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-white px-4 py-2 rounded-xl border border-slate-100 shadow-sm">
+          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+          {substations.length} Infrastructure Nodes
+        </div>
+      </div>
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex-1">
         <div className="overflow-x-auto h-full custom-scrollbar">
           <table className="w-full text-left border-collapse">
@@ -53,7 +73,7 @@ export default function SubstationListView({
                         </div>
                         <div>
                           <p className="font-bold text-slate-900 tracking-tight">{sub.name}</p>
-                          <p className="text-[11px] text-slate-500 font-medium">Distribution Node</p>
+                          <p className="text-[11px] text-slate-500 font-medium">{sub.owner || 'Distribution Node'}</p>
                         </div>
                       </div>
                     </td>

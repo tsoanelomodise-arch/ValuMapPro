@@ -16,7 +16,8 @@ import {
   Layers,
   Map as MapIcon,
   ExternalLink,
-  FileDown
+  FileDown,
+  Mountain
 } from 'lucide-react';
 import { cn, calculateDistance } from '../../lib/utils';
 import MapDetailsOverlay from './MapDetailsOverlay';
@@ -140,9 +141,11 @@ interface MapComponentProps {
   selectedSubstation?: Substation | null;
   onAddSubstation?: (substation: Substation) => void;
   onDiscoverNearby?: (bounds: { north: number, south: number, east: number, west: number }) => void;
+  onDiscoverLand?: (bounds: { north: number, south: number, east: number, west: number }) => void;
   onCancelDiscovery?: () => void;
   onClearCandidates?: () => void;
   isDiscovering?: boolean;
+  isDiscoveringLand?: boolean;
   rulerActive: boolean;
   onRulerActiveChange: (active: boolean) => void;
   onOpenDetails?: (property: Property) => void;
@@ -329,7 +332,9 @@ const CandidateSubstationLayerGroup = React.memo(({
                 </div>
                 <div>
                   <p className="font-black text-xs m-0 text-slate-900 uppercase tracking-tight leading-none">{substation.name}</p>
-                  <p className="text-[8px] text-slate-400 m-0 uppercase font-bold tracking-[0.1em] mt-1">Candidate Entity</p>
+                  <p className="text-[8px] text-slate-400 m-0 uppercase font-bold tracking-[0.1em] mt-1">
+                    {substation.owner || 'Candidate Entity'}
+                  </p>
                 </div>
               </div>
               
@@ -375,9 +380,11 @@ export default function MapComponent({
   isFullscreen,
   onFullscreenChange,
   onDiscoverNearby,
+  onDiscoverLand,
   onCancelDiscovery,
   onClearCandidates,
-  isDiscovering = false
+  isDiscovering = false,
+  isDiscoveringLand = false
 }: MapComponentProps) {
   const [isSearchingArea, setIsSearchingArea] = useState(false);
   const [currentMapName, setCurrentMapName] = useState<string | null>(null);
@@ -1060,6 +1067,7 @@ export default function MapComponent({
 
         {onDiscoverNearby && (
           <div className="flex flex-col gap-2">
+            {/* Substation Discovery */}
             <div className="relative group flex items-center gap-2">
               <button
                 onClick={() => {
@@ -1102,8 +1110,54 @@ export default function MapComponent({
                  </div>
               )}
             </div>
+
+            {/* Vacant Land Discovery */}
+            {onDiscoverLand && (
+              <div className="relative group flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (isDiscoveringLand) {
+                      onCancelDiscovery?.();
+                    } else if (mapInstanceRef.current) {
+                      const bounds = mapInstanceRef.current.getBounds();
+                      onDiscoverLand?.({
+                        north: bounds.getNorth(),
+                        south: bounds.getSouth(),
+                        east: bounds.getEast(),
+                        west: bounds.getWest()
+                      });
+                    }
+                  }}
+                  className={cn(
+                    "p-3 rounded-xl shadow-xl transition-all border relative flex items-center justify-center",
+                    isDiscoveringLand 
+                      ? "bg-emerald-500 text-white border-emerald-600 hover:bg-emerald-600 shadow-emerald-200/50" 
+                      : "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700 active:scale-95"
+                  )}
+                  title={isDiscoveringLand ? "Stop Searching" : "Find Vacant Land"}
+                >
+                  {isDiscoveringLand ? (
+                    <X className="w-4 h-4 animate-in fade-in zoom-in duration-300" />
+                  ) : (
+                    <Mountain className="w-4 h-4" />
+                  )}
+                  
+                  {isDiscoveringLand && (
+                    <span className="absolute left-14 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-lg whitespace-nowrap shadow-2xl pointer-events-none">
+                      Scanning Land...
+                    </span>
+                  )}
+                </button>
+
+                {isDiscoveringLand && (
+                   <div className="flex flex-col">
+                      <span className="text-[8px] font-black text-emerald-600 uppercase tracking-tighter animate-pulse">Live Scanning</span>
+                   </div>
+                )}
+              </div>
+            )}
             
-            {onClearCandidates && candidateSubstations.length > 0 && !isDiscovering && (
+            {onClearCandidates && (candidateSubstations.length > 0 || (properties.some(p => p.id.startsWith('candidate-land-')))) && !isDiscovering && !isDiscoveringLand && (
               <button
                 onClick={onClearCandidates}
                 className="p-3 bg-white text-slate-400 hover:text-red-500 rounded-xl shadow-xl transition-all border border-slate-200 hover:border-red-100"

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Property, Substation, PROPERTY_TYPE_COLORS } from '../../types';
-import { MapPin, Zap, ArrowUpRight } from 'lucide-react';
+import { MapPin, Zap, ArrowUpRight, Search } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface SpatialCatalogProps {
@@ -13,6 +13,8 @@ interface SpatialCatalogProps {
   onSelectProperty: (property: Property) => void;
   onOpenDetails: (property: Property) => void;
   onSelectSubstation: (substation: Substation) => void;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
 }
 
 export function SpatialCatalog({
@@ -24,7 +26,9 @@ export function SpatialCatalog({
   onToggleVisibility,
   onSelectProperty,
   onOpenDetails,
-  onSelectSubstation
+  onSelectSubstation,
+  searchQuery,
+  setSearchQuery
 }: SpatialCatalogProps) {
   return (
     <div 
@@ -36,6 +40,18 @@ export function SpatialCatalog({
            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Records</span>
          </div>
          <h3 className="text-sm font-black text-slate-900 tracking-tight italic uppercase">Spatial Catalog</h3>
+      </div>
+      <div className="p-2 border-b border-slate-100">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <input 
+            type="text"
+            placeholder="Search catalog..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-slate-50 border border-slate-100 rounded-lg pl-9 pr-3 py-2 text-[10px] font-bold uppercase tracking-widest outline-none focus:ring-1 focus:ring-blue-500/20 transition-all"
+          />
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
          <div className="space-y-1">

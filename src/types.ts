@@ -45,6 +45,7 @@ export const PROPERTY_TYPE_COLORS: Record<PropertyType, string> = {
 export interface Substation {
   id: string;
   name: string;
+  owner?: string;
   address: string;
   coordinates: [number, number];
   googleMapsUrl?: string;

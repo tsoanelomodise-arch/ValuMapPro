@@ -24,9 +24,10 @@ import {
   Check,
   Zap
 } from 'lucide-react';
-import { searchSubstations, searchSubstationsByArea, AISubstation } from './services/geminiService';
+import { searchSubstations, searchSubstationsByArea, searchVacantLandByArea, AISubstation } from './services/geminiService';
 import { GoogleGenAI, Type } from "@google/genai";
 import { cn } from './lib/utils';
+import { motion, AnimatePresence } from 'motion/react';
 
 // Custom hook for local storage persistence
 function usePersistedState<T>(key: string, defaultValue: T | (() => T)) {
@@ -56,6 +57,7 @@ function usePersistedState<T>(key: string, defaultValue: T | (() => T)) {
 
 import SubstationEditModal from './components/Modals/SubstationEditModal';
 import SubstationAddForm from './components/Modals/SubstationAddForm';
+import { UserGuideModal } from './components/Modals/UserGuideModal';
 
 export default function App() {
   const [properties, setProperties] = usePersistedState<Property[]>('propscope_properties', mockProperties);
@@ -86,6 +88,7 @@ export default function App() {
 
   const [view, setView] = useState<'map' | 'list'>('map');
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isUserGuideOpen, setIsUserGuideOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [selectedSubstation, setSelectedSubstation] = useState<Substation | null>(null);
@@ -108,6 +111,8 @@ export default function App() {
   const [hiddenPropertyIds, setHiddenPropertyIds] = usePersistedState<string[]>('propscope_hidden_properties', []);
   const [candidateSubstations, setCandidateSubstations] = useState<Substation[]>([]);
   const [isDiscovering, setIsDiscovering] = useState(false);
+  const [isDiscoveringLand, setIsDiscoveringLand] = useState(false);
+  const [notifications, setNotifications] = useState<{ id: string, message: string, type: 'success' | 'error' | 'info' }[]>([]);
   const discoveryAbortControllerRef = React.useRef<AbortController | null>(null);
   const importAbortControllerRef = React.useRef<AbortController | null>(null);
 
@@ -117,6 +122,7 @@ export default function App() {
       discoveryAbortControllerRef.current = null;
     }
     setIsDiscovering(false);
+    setIsDiscoveringLand(false);
   }, []);
 
   const handleCancelImport = useCallback(() => {
@@ -129,14 +135,44 @@ export default function App() {
     setIsSubstationModalOpen(false);
   }, []);
 
+  const addNotification = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setNotifications(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 5000);
+  }, []);
+
   const togglePropertyVisibility = useCallback((id: string) => {
     setHiddenPropertyIds(prev => 
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
   }, [setHiddenPropertyIds]);
 
+  const handleAddLandToPortfolio = useCallback((land: Property) => {
+    setProperties(prev => {
+      // Remove the candidate ID prefix to make it a permanent record
+      const newLand = { 
+        ...land, 
+        id: land.id.replace('candidate-land-', 'prop-'),
+        // Ensure it's not marked as candidate anymore if we use a flag in future
+      };
+      // Remove the candidate from the list and add the "real" one
+      return [newLand, ...prev.filter(p => p.id !== land.id)];
+    });
+    // Keep detail open but update selected property to the new one
+    setSelectedProperty(prev => prev?.id === land.id ? { ...land, id: land.id.replace('candidate-land-', 'prop-') } : prev);
+  }, [setProperties]);
+
   const handleSelectProperty = useCallback((property: Property) => {
     setSelectedProperty(property);
+    setView('map');
+  }, []);
+
+  const handleSelectSubstation = useCallback((substation: Substation) => {
+    setSelectedSubstation(substation);
+    setSelectedProperty(null);
+    setView('map');
   }, []);
 
   const handleOpenDetails = useCallback((property: Property) => {
@@ -161,6 +197,49 @@ export default function App() {
       s.status.toLowerCase().includes(searchQuery.toLowerCase())
     ), [substations, searchQuery]);
 
+  const handleDiscoverLand = useCallback(async (bounds: { north: number, south: number, east: number, west: number }) => {
+    if (discoveryAbortControllerRef.current) {
+      discoveryAbortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    discoveryAbortControllerRef.current = controller;
+
+    setIsDiscoveringLand(true);
+    try {
+      const results = await searchVacantLandByArea(bounds.north, bounds.south, bounds.east, bounds.west);
+      
+      if (controller.signal.aborted) return;
+
+      const newCandidates: Property[] = results.map((res, index) => ({
+        ...res,
+        id: `candidate-land-${Date.now()}-${index}`,
+        financials: {
+          ...res.financials,
+          marketValue: res.financials.purchasePrice ? res.financials.purchasePrice * 1.1 : 1000000
+        }
+      }));
+
+      if (newCandidates.length > 0) {
+        setProperties(prev => {
+          const nonCandidates = prev.filter(p => !p.id.startsWith('candidate-land-'));
+          return [...nonCandidates, ...newCandidates];
+        });
+        addNotification(`Discovered ${newCandidates.length} vacant land listings.`, 'success');
+      } else {
+        addNotification("No vacant land listings found in this area.", 'info');
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      console.error("Land discovery failed:", error);
+      addNotification("Land discovery failed. Please try again.", 'error');
+    } finally {
+      if (!discoveryAbortControllerRef.current || discoveryAbortControllerRef.current === controller) {
+        setIsDiscoveringLand(false);
+        discoveryAbortControllerRef.current = null;
+      }
+    }
+  }, [setProperties, addNotification]);
+
   const handleDiscoverNearby = useCallback(async (bounds: { north: number, south: number, east: number, west: number }) => {
     if (discoveryAbortControllerRef.current) {
       discoveryAbortControllerRef.current.abort();
@@ -177,6 +256,7 @@ export default function App() {
       const newCandidates: Substation[] = results.map((res, index) => ({
         id: `candidate-${Date.now()}-${index}`,
         name: res.name,
+        owner: res.owner,
         address: res.address,
         coordinates: res.coordinates,
         status: 'Planned',
@@ -197,18 +277,21 @@ export default function App() {
       setCandidateSubstations(filteredCandidates);
       
       if (filteredCandidates.length === 0) {
-        alert("No new substations discovered in this immediate area.");
+        addNotification("No new substations discovered in this immediate area.", 'info');
+      } else {
+        addNotification(`Discovered ${filteredCandidates.length} new substations.`, 'success');
       }
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return;
       console.error("Discovery failed:", error);
+      addNotification("Substation discovery failed. Please try again.", 'error');
     } finally {
       if (!discoveryAbortControllerRef.current || discoveryAbortControllerRef.current === controller) {
         setIsDiscovering(false);
         discoveryAbortControllerRef.current = null;
       }
     }
-  }, [substations]);
+  }, [substations, addNotification]);
 
   const handleAddCandidate = useCallback((candidate: Substation) => {
     const newSub: Substation = {
@@ -512,6 +595,7 @@ export default function App() {
         onImportProperty={() => setIsImportModalOpen(true)}
         onAddSubstation={() => setIsSubstationModalOpen(true)}
         onRestoreDefaults={handleRestoreDefaults}
+        onShowUserGuide={() => setIsUserGuideOpen(true)}
       />
 
       <main className="flex-1 flex flex-col overflow-hidden relative">
@@ -552,10 +636,9 @@ export default function App() {
                        onToggleVisibility={togglePropertyVisibility}
                        onSelectProperty={handleSelectProperty}
                        onOpenDetails={handleOpenDetails}
-                       onSelectSubstation={(s) => {
-                         setSelectedSubstation(s);
-                         setSelectedProperty(null);
-                       }}
+                       onSelectSubstation={handleSelectSubstation}
+                       searchQuery={searchQuery}
+                       setSearchQuery={setSearchQuery}
                      />
 
                     <div 
@@ -568,13 +651,18 @@ export default function App() {
                          candidateSubstations={candidateSubstations}
                          onSelectProperty={handleSelectProperty} 
                          selectedProperty={selectedProperty}
-                         onSelectSubstation={setSelectedSubstation}
+                         onSelectSubstation={handleSelectSubstation}
                          selectedSubstation={selectedSubstation}
                          onAddSubstation={handleAddCandidate}
                          onDiscoverNearby={handleDiscoverNearby}
+                         onDiscoverLand={handleDiscoverLand}
                          onCancelDiscovery={handleCancelDiscovery}
-                         onClearCandidates={() => setCandidateSubstations([])}
+                         onClearCandidates={() => {
+                           setCandidateSubstations([]);
+                           setProperties(prev => prev.filter(p => !p.id.startsWith('candidate-land-')));
+                         }}
                          isDiscovering={isDiscovering}
+                         isDiscoveringLand={isDiscoveringLand}
                          rulerActive={isRulerActive}
                          onRulerActiveChange={setIsRulerActive}
                          onOpenDetails={handleOpenDetails}
@@ -603,17 +691,18 @@ export default function App() {
                          selectedProperty={selectedProperty}
                          onDeleteProperty={setPropertyToDelete}
                          onDeleteMultipleProperties={setPropertiesToDelete}
+                         searchQuery={searchQuery}
+                         setSearchQuery={setSearchQuery}
                       />
                     ) : (
                       <SubstationListView 
                         substations={filteredSubstations}
-                        onSelectSubstation={(sub) => {
-                          setSelectedSubstation(sub);
-                          setView('map');
-                        }}
+                        onSelectSubstation={handleSelectSubstation}
                         selectedSubstation={selectedSubstation}
                         onDeleteSubstation={setSubstationToDelete}
                         onEditSubstation={setSubstationToEdit}
+                        searchQuery={searchQuery}
+                        setSearchQuery={setSearchQuery}
                       />
                     )}
                   </div>
@@ -664,6 +753,7 @@ export default function App() {
                       substations={substations}
                       onDeleteProperty={setPropertyToDelete}
                       onUpdateProperty={handleUpdateProperty}
+                      onAddCandidate={handleAddLandToPortfolio}
                       initialEditMode={isEditingRequested}
                     />
                 </div>
@@ -671,6 +761,10 @@ export default function App() {
           )}
         </div>
       </main>
+
+      {isUserGuideOpen && (
+        <UserGuideModal onClose={() => setIsUserGuideOpen(false)} />
+      )}
 
       {isImportModalOpen && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6">
@@ -1094,6 +1188,43 @@ export default function App() {
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         .leaflet-container { width: 100%; height: 100%; border-radius: 0.75rem; }
       `}</style>
+      {/* Toast Notifications */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex flex-col gap-3 z-[10000] pointer-events-none">
+        <AnimatePresence>
+          {notifications.map(n => (
+            <motion.div 
+              key={n.id}
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+              className={cn(
+                "px-6 py-4 rounded-2xl shadow-2xl border flex items-center gap-4 pointer-events-auto backdrop-blur-md",
+                n.type === 'success' ? "bg-emerald-600/90 text-white border-emerald-500" :
+                n.type === 'error' ? "bg-red-600/90 text-white border-red-500" :
+                "bg-slate-900/90 text-white border-slate-800"
+              )}
+            >
+              <div className={cn(
+                "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-sm",
+                n.type === 'success' ? "bg-emerald-500" :
+                n.type === 'error' ? "bg-red-500" :
+                "bg-slate-800"
+              )}>
+                {n.type === 'success' && <Check className="w-4 h-4" />}
+                {n.type === 'error' && <AlertTriangle className="w-4 h-4" />}
+                {n.type === 'info' && <Search className="w-4 h-4" />}
+              </div>
+              <span className="text-[11px] font-black uppercase tracking-widest leading-none">{n.message}</span>
+              <button 
+                onClick={() => setNotifications(prev => prev.filter(item => item.id !== n.id))}
+                className="ml-4 p-1 hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

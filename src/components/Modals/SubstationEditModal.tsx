@@ -65,6 +65,16 @@ export default function SubstationEditModal({
                   placeholder="Enter name..."
                 />
               </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block">Owner / Operator</label>
+                <input
+                  value={formData.owner || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, owner: e.target.value }))}
+                  className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-600 focus:bg-white rounded-xl px-4 py-3 text-sm font-bold transition-all outline-none"
+                  placeholder="e.g. Eskom, City of Cape Town..."
+                />
+              </div>
               
               <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block">Status</label>

@@ -67,6 +67,7 @@ export default function SubstationAddForm({ onAdd, onShowCandidates, isSubmittin
       return {
         id: Math.random().toString(36).substr(2, 9),
         name: aiSub.name,
+        owner: aiSub.owner,
         address: aiSub.address,
         coordinates: safeCoords as [number, number],
         status: 'Active',
@@ -153,7 +154,12 @@ export default function SubstationAddForm({ onAdd, onShowCandidates, isSubmittin
                             </span>
                           )}
                         </div>
-                        <p className="text-[10px] text-slate-500 truncate italic mb-1">{sub.address}</p>
+                        <p className="text-[10px] text-slate-500 truncate italic mb-0.5">{sub.address}</p>
+                        {sub.owner && (
+                          <p className="text-[9px] font-black text-indigo-500 uppercase tracking-tight mb-1">
+                            {sub.owner}
+                          </p>
+                        )}
                         {sub.mvaCapacity && (
                           <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">
                             Capacity: {sub.mvaCapacity} MVA
@@ -182,9 +188,10 @@ export default function SubstationAddForm({ onAdd, onShowCandidates, isSubmittin
                     <button 
                       onClick={() => {
                         const selected = searchResults.filter((_, idx) => selectedIndices.has(idx));
-                        const subs: Substation[] = selected.map((aiSub, i) => ({
+                         const subs: Substation[] = selected.map((aiSub, i) => ({
                           id: `candidate-${Date.now()}-${i}`,
                           name: aiSub.name,
+                          owner: aiSub.owner,
                           address: aiSub.address,
                           coordinates: (Array.isArray(aiSub.coordinates) && aiSub.coordinates.length >= 2) ? aiSub.coordinates : [-26.1311, 28.0536],
                           status: 'Planned',
@@ -195,6 +202,7 @@ export default function SubstationAddForm({ onAdd, onShowCandidates, isSubmittin
                         onShowCandidates(subs.length > 0 ? subs : searchResults.map((aiSub, i) => ({
                            id: `candidate-all-${Date.now()}-${i}`,
                            name: aiSub.name,
+                           owner: aiSub.owner,
                            address: aiSub.address,
                            coordinates: (Array.isArray(aiSub.coordinates) && aiSub.coordinates.length >= 2) ? aiSub.coordinates : [-26.1311, 28.0536],
                            status: 'Planned',
