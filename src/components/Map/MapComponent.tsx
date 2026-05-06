@@ -242,27 +242,28 @@ const createColoredIcon = (color: string, isSelected: boolean = false, label?: s
 };
 
 const createCandidateIcon = (isSelected: boolean = false, label?: string, isProperty: boolean = false) => {
-  const width = isSelected ? 28 : 20;
+  const width = isSelected ? 32 : 24;
   const height = width * 1.4;
-  const color = isProperty ? '#10b981' : '#94a3b8'; // Emerald 500 for land, Slate 400 for stations
+  const color = isProperty ? '#059669' : '#4f46e5'; // Emerald 600 for land, Indigo 600 for stations
   
   return L.divIcon({
     className: `custom-div-icon candidate-icon ${isProperty ? 'property-candidate' : 'station-candidate'}`,
     html: `
       <div class="relative flex flex-col items-center">
-        <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-lg opacity-80">
-          <path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 34 12 34C12 34 24 21 24 12C24 5.37 18.63 0 12 0Z" fill="${color}" stroke="white" stroke-width="1" stroke-dasharray="2,2"/>
-          <path d="M12 8V16M8 12H16" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        <div class="absolute -inset-2 bg-${isProperty ? 'emerald' : 'indigo'}-500/20 rounded-full blur-md animate-pulse"></div>
+        <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-2xl relative z-10">
+          <path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 34 12 34C12 34 24 21 24 12C24 5.37 18.63 0 12 0Z" fill="${color}" stroke="white" stroke-width="2"/>
+          <path d="M12 8V16M8 12H16" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
         </svg>
         ${label ? `
-          <div class="mt-0.5 px-1 py-0 select-none">
-              <span class="text-[7px] font-bold ${isProperty ? 'text-emerald-600' : 'text-slate-400'} uppercase whitespace-nowrap leading-none drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]">${label}</span>
+          <div class="mt-1 px-2 py-0.5 bg-white/90 backdrop-blur-sm rounded-md shadow-sm border border-slate-200 select-none relative z-10">
+              <span class="text-[8px] font-black ${isProperty ? 'text-emerald-700' : 'text-indigo-700'} uppercase whitespace-nowrap leading-none tracking-wider">${label}</span>
           </div>
         ` : ''}
       </div>
     `,
-    iconSize: [80, height + 20],
-    iconAnchor: [40, height],
+    iconSize: [120, height + 40],
+    iconAnchor: [60, height],
   });
 };
 
@@ -297,16 +298,17 @@ const SubstationLayerGroup = React.memo(({ substations, onSelect, selectedId, op
   );
 });
 
-// Memoized Candidate Property Markers
-const CandidatePropertyLayerGroup = React.memo(({ properties, onAdd }: { properties: Property[], onAdd?: (p: Property) => void }) => {
+// Candidate Property Markers
+const CandidatePropertyLayerGroup = ({ properties, onAdd, selectedId }: { properties: Property[], onAdd?: (p: Property) => void, selectedId?: string }) => {
+  console.log("Rendering Candidate Properties:", properties.length);
   return (
-    <>
-      {properties.map(property => (
+    <LayerGroup>
+      {properties.filter(p => p.coordinates && Array.isArray(p.coordinates) && !isNaN(p.coordinates[0])).map(property => (
         <Marker
           key={`candidate-prop-${property.id}`}
           position={property.coordinates as [number, number]}
-          icon={createCandidateIcon(false, property.name, true)}
-          zIndexOffset={500}
+          icon={createCandidateIcon(selectedId === property.id, property.name, true)}
+          zIndexOffset={selectedId === property.id ? 1100 : 600}
         >
           <Popup>
             <div className="p-3 min-w-[200px]">
@@ -343,9 +345,9 @@ const CandidatePropertyLayerGroup = React.memo(({ properties, onAdd }: { propert
           </Popup>
         </Marker>
       ))}
-    </>
+    </LayerGroup>
   );
-});
+};
 
 // Component to handle map movements when selected property changes
 function MapController({ center, rulerActive }: { center: [number, number] | null, rulerActive: boolean }) {
@@ -371,8 +373,8 @@ function MapController({ center, rulerActive }: { center: [number, number] | nul
   return null;
 }
 
-// Memoized Candidate Substation Markers
-const CandidateSubstationLayerGroup = React.memo(({ 
+// Candidate Substation Markers
+const CandidateSubstationLayerGroup = ({ 
   substations, 
   onAdd, 
   selectedId 
@@ -382,7 +384,7 @@ const CandidateSubstationLayerGroup = React.memo(({
   selectedId?: string 
 }) => {
   return (
-    <>
+    <LayerGroup>
       {substations.map(substation => (
         <Marker
           key={`candidate-${substation.id}`}
@@ -427,9 +429,9 @@ const CandidateSubstationLayerGroup = React.memo(({
           </Popup>
         </Marker>
       ))}
-    </>
+    </LayerGroup>
   );
-});
+};
 
 export default function MapComponent({ 
   properties, 
@@ -1033,11 +1035,13 @@ export default function MapComponent({
         <CandidateSubstationLayerGroup 
           substations={candidateSubstations} 
           onAdd={onAddSubstation} 
+          selectedId={selectedSubstation?.id} 
         />
 
         <CandidatePropertyLayerGroup 
           properties={candidateProperties}
           onAdd={onAddProperty}
+          selectedId={selectedProperty?.id}
         />
 
         {rulerPoints.map((point, idx) => (

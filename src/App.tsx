@@ -220,50 +220,73 @@ export default function App() {
     
     console.log("Starting Land Discovery with bounds:", bounds);
     try {
+      // Find substations within or very near the current visible bounds to prioritize search near them
+      const visibleSubstations = (substations || []).filter(s => {
+        if (!s.coordinates || !Array.isArray(s.coordinates)) return false;
+        const [lat, lng] = s.coordinates;
+        // Expand bounds slightly to catch nearby stations
+        return lat <= bounds.north + 0.05 && 
+               lat >= bounds.south - 0.05 && 
+               lng <= bounds.east + 0.05 && 
+               lng >= bounds.west - 0.05;
+      }).map(s => `${s.name} (approx. ${s.coordinates[0].toFixed(4)}, ${s.coordinates[1].toFixed(4)})`);
+
+      if (visibleSubstations.length > 0) {
+        console.log("Prioritizing discovery near substations:", visibleSubstations);
+      }
+
       // Phase 1: Find listing links
-      const links = await findLandListingLinks(bounds.north, bounds.south, bounds.east, bounds.west);
-      console.log("Land links found:", links);
+      addNotification("Searching Property24 and Private Property databases...", 'info');
+      console.log("Land Discovery: Searching area", { north: bounds.north, south: bounds.south, east: bounds.east, west: bounds.west, substations: visibleSubstations });
+      const links = await findLandListingLinks(bounds.north, bounds.south, bounds.east, bounds.west, visibleSubstations);
+      console.log("Land Discovery: Found links", links);
       
       if (controller.signal.aborted) return;
 
       if (!links || links.length === 0) {
-        addNotification("No vacant land listings found in this area. Try zooming out.", 'info');
+        addNotification("No vacant land listings found in this area. Try zooming out or moving the map.", 'info');
         setIsDiscoveringLand(false);
         setDiscoveryProgress(null);
         return;
       }
 
+      addNotification(`Found ${links.length} candidate URLs. Harvesting details...`, 'info');
       setDiscoveryProgress({ current: 0, total: links.length });
       
       // Phase 2: Iterate and discover details one by one
       let count = 0;
-      for (const link of links) {
+      for (let i = 0; i < links.length; i++) {
         if (controller.signal.aborted) break;
+        
+        const link = links[i];
+        setDiscoveryProgress(prev => prev ? { ...prev, current: i + 1 } : null);
         
         try {
           const res = await importPropertyListing(link);
           if (res && !controller.signal.aborted) {
-            // Coordinate integrity check for South Africa
+            // Extract coordinates and handle South Africa specifics
             let finalCoords = res.coordinates;
             if (Array.isArray(finalCoords) && finalCoords.length >= 2) {
               let [lat, lng] = finalCoords;
               // In SA, lat is negative (~ -22 to -35) and lng is positive (~ 16 to 33)
-              // If we get [lng, lat] (e.g. [28.5, -26.1]), flip them to [-26.1, 28.5]
+              // Handle potential flipped or positive inputs from model
               if (lat > 0 && lng < 0) {
                 finalCoords = [lng, lat];
+              } else if (lat > 0 && lat < 40 && lng > 0) {
+                finalCoords = [-lat, lng];
               }
-              // If model returns positive lat by mistake e.g. [26.1, 28.5]
-              // we know for SA it MUST be negative lat.
-              else if (lat > 0 && lat < 40 && lng > 0) {
-                  finalCoords = [-lat, lng];
-              }
+            }
+
+            if (!finalCoords || !Array.isArray(finalCoords) || isNaN(finalCoords[0])) {
+               console.warn("Skipping property due to missing coordinates:", res.name);
+               continue;
             }
 
             const newCandidate: Property = {
               ...res,
-              id: `candidate-land-${Date.now()}-${count}`,
-              coordinates: finalCoords,
-              type: 'Agricultural', // Default to Agricultural for vacant land
+              id: `candidate-land-${Date.now()}-${i}`,
+              coordinates: finalCoords as [number, number],
+              type: 'Agricultural',
               specs: res.specs || { standSize: 1000, titleType: 'Full title' },
               financials: {
                 purchasePrice: res.financials?.purchasePrice || 0,
@@ -271,20 +294,23 @@ export default function App() {
               }
             };
             
+            console.log("Adding candidate property:", newCandidate.name, finalCoords);
             setCandidateProperties(prev => [...prev, newCandidate]);
             count++;
           }
         } catch (e) {
           console.warn(`Failed to import property ${link}:`, e);
         }
-        
-        setDiscoveryProgress(prev => prev ? { ...prev, current: prev.current + 1 } : null);
       }
 
       if (count > 0) {
-        addNotification(`Discovered ${count} vacant land listings.`, 'success');
+        addNotification(`Successfully discovered and mapped ${count} vacant land listings near substations.`, 'success');
       } else if (!controller.signal.aborted) {
-        addNotification("Failed to fetch details for discovered links.", 'error');
+        if (links.length > 0) {
+          addNotification("Found listing links but failed to extract precise spatial coordinates. This usually happens when address data is obfuscated in the listing. Try searching a different area.", 'warning');
+        } else {
+          addNotification("No vacant land listings found in this area. No results from Property24 / Private Property index.", 'info');
+        }
       }
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return;
@@ -297,7 +323,7 @@ export default function App() {
         discoveryAbortControllerRef.current = null;
       }
     }
-  }, [addNotification]);
+  }, [addNotification, substations]);
 
   const handleDiscoverNearby = useCallback(async (bounds: { north: number, south: number, east: number, west: number }) => {
     if (discoveryAbortControllerRef.current) {
@@ -619,7 +645,9 @@ export default function App() {
                   >
                      <SpatialCatalog 
                        properties={filteredProperties}
+                       candidateProperties={candidateProperties}
                        substations={filteredSubstations}
+                       candidateSubstations={candidateSubstations}
                        selectedPropertyId={selectedProperty?.id}
                        selectedSubstationId={selectedSubstation?.id}
                        hiddenPropertyIds={hiddenPropertyIds}

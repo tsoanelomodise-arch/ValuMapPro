@@ -255,19 +255,23 @@ export async function searchVacantLandByArea(north: number, south: number, east:
   }
 }
 
-export async function findLandListingLinks(north: number, south: number, east: number, west: number): Promise<string[]> {
+export async function findLandListingLinks(north: number, south: number, east: number, west: number, nearbySubstations?: string[]): Promise<string[]> {
   const ai = getAI();
   if (!ai) return [];
+
+  const substationContext = nearbySubstations && nearbySubstations.length > 0 
+    ? `\nCRITICAL PRIORITY: You must find listings that are within a 3km maximum radius of these electrical substations: ${nearbySubstations.join(', ')}. This is for a high-priority energy project. If no land is found within 3km of THESE exact stations, broaden search slightly but stay as close as possible.`
+    : "";
 
   try {
     const response = await ai.models.generateContent({
       model: "gemini-flash-latest",
-      contents: `Search for actual VACANT LAND, RESIDENTIAL STANDS, or AGRICULTURAL LAND listings for sale in South Africa near this area:
-      Latitude ${north} to ${south}, Longitude ${west} to ${east}.
+      contents: `Search for actual VACANT LAND, RESIDENTIAL STANDS, or AGRICULTURAL LAND listings for sale in South Africa inside this area:
+      Latitude ${north} to ${south}, Longitude ${west} to ${east}.${substationContext}
       
-      Find 5-10 specific listings on Property24 (property24.com) or Private Property (privateproperty.co.za).
+      Focus on Property24 (property24.com) and Private Property.
       
-      Return ONLY a JSON object with a 'links' array containing the full URLs or clear listing references for each property found.`,
+      Return ONLY a JSON object with a 'links' array containing the full URLs for each property found.`,
       config: {
         responseMimeType: "application/json",
         tools: [{ googleSearch: {} }],
