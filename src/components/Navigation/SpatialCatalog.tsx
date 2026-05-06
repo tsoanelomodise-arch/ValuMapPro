@@ -8,7 +8,7 @@ interface SpatialCatalogProps {
   substations: Substation[];
   selectedPropertyId?: string | null;
   selectedSubstationId?: string | null;
-  visiblePropertyIds: string[];
+  hiddenPropertyIds: string[];
   onToggleVisibility: (id: string) => void;
   onSelectProperty: (property: Property) => void;
   onOpenDetails: (property: Property) => void;
@@ -20,7 +20,7 @@ export function SpatialCatalog({
   substations,
   selectedPropertyId,
   selectedSubstationId,
-  visiblePropertyIds,
+  hiddenPropertyIds,
   onToggleVisibility,
   onSelectProperty,
   onOpenDetails,
@@ -52,7 +52,7 @@ export function SpatialCatalog({
                 <div className="pl-1">
                   <input 
                     type="checkbox"
-                    checked={visiblePropertyIds.includes(p.id)}
+                    checked={!hiddenPropertyIds.includes(p.id)}
                     onChange={() => onToggleVisibility(p.id)}
                     className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                   />
@@ -64,7 +64,7 @@ export function SpatialCatalog({
                     selectedPropertyId === p.id 
                       ? "bg-blue-50/50 border-blue-200 shadow-sm" 
                       : "bg-white border-transparent hover:bg-slate-50",
-                    !visiblePropertyIds.includes(p.id) && "opacity-60 grayscale-[0.5]"
+                    hiddenPropertyIds.includes(p.id) && "opacity-60 grayscale-[0.5]"
                   )}
                 >
                   <div 

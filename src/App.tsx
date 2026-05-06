@@ -25,6 +25,7 @@ import {
   Zap
 } from 'lucide-react';
 import { searchSubstations, AISubstation } from './services/geminiService';
+import { GoogleGenAI, Type } from "@google/genai";
 import { cn } from './lib/utils';
 
 // Custom hook for local storage persistence
@@ -92,7 +93,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [listingNumber, setListingNumber] = useState('');
+  const [importValue, setImportValue] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [propertyToDelete, setPropertyToDelete] = useState<string | null>(null);
   const [isSubstationModalOpen, setIsSubstationModalOpen] = useState(false);
@@ -100,24 +101,25 @@ export default function App() {
   const [substationToDelete, setSubstationToDelete] = useState<null | string>(null);
   const [isDuplicateWarningOpen, setIsDuplicateWarningOpen] = useState(false);
   const [pendingSubstation, setPendingSubstation] = useState<Substation | null>(null);
+  const [pendingProperty, setPendingProperty] = useState<Property | null>(null);
   const [isRulerActive, setIsRulerActive] = useState(false);
   const [isEditingRequested, setIsEditingRequested] = useState(false);
-  const [visiblePropertyIds, setVisiblePropertyIds] = usePersistedState<string[]>('propscope_visible_properties', () => properties.map(p => p.id));
+  const [hiddenPropertyIds, setHiddenPropertyIds] = usePersistedState<string[]>('propscope_hidden_properties', []);
 
-  const togglePropertyVisibility = (id: string) => {
-    setVisiblePropertyIds(prev => 
+  const togglePropertyVisibility = useCallback((id: string) => {
+    setHiddenPropertyIds(prev => 
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
-  };
+  }, [setHiddenPropertyIds]);
 
-  const handleSelectProperty = (property: Property) => {
+  const handleSelectProperty = useCallback((property: Property) => {
     setSelectedProperty(property);
-  };
+  }, []);
 
-  const handleOpenDetails = (property: Property) => {
+  const handleOpenDetails = useCallback((property: Property) => {
     setSelectedProperty(property);
     setIsDetailOpen(true);
-  };
+  }, []);
 
   // Memoized filtered data for efficiency
   const filteredProperties = useMemo(() => 
@@ -134,72 +136,89 @@ export default function App() {
     ), [substations, searchQuery]);
 
   const handleImport = useCallback(async () => {
-    if (!listingNumber) return;
-    if (!/^\d{5,15}$/.test(listingNumber)) {
-      alert("Invalid format. Please enter a numeric listing number (e.g., 112233445).");
+    if (!importValue) return;
+    
+    // Extract listing number from URL or validate as numeric
+    let finalListingNumber = importValue;
+    if (importValue.includes('property24.com')) {
+      const parts = importValue.split('/');
+      finalListingNumber = parts[parts.length - 1] || parts[parts.length - 2];
+    }
+
+    if (!/^\d{5,15}$/.test(finalListingNumber)) {
+      alert("Invalid format. Please enter a Property24 URL or a numeric listing number.");
       return;
     }
 
     setIsImporting(true);
     try {
-      const response = await fetch("/api/ai/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: `Find the official Property24 listing for South African property with listing number: ${listingNumber}. 
-          Extract the information into the following JSON format. Use Google Search to find the EXACT GPS coordinates (Latitude, Longitude) for this property if possible.
-          If certain financial details are not available, estimate them based on standard SA market rates.`,
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error("GEMINI_API_KEY is not configured.");
+      }
+      
+      const ai = new GoogleGenAI({ apiKey });
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `Find and extract property details for the South African property associated with this reference: ${importValue}.
+        If a URL is provided, analyze the content directly. If a listing number is provided, search for the official Property24 listing.
+        
+        Extract the information into the following JSON format. Use Google Search to find the EXACT GPS coordinates (Latitude, Longitude) for this property if possible.
+        Try to find the EXACT Property24 URL which typically looks like https://www.property24.com/for-sale/<suburb>/<city>/<province>/<areaId>/<listingNumber>.
+        If certain financial details are not available, estimate them based on standard SA market rates.`,
+        config: {
+          responseMimeType: "application/json",
           tools: [{ googleSearch: {} }],
-          schema: {
-            type: "OBJECT",
+          responseSchema: {
+            type: Type.OBJECT,
             properties: {
-              name: { type: "STRING" },
-              type: { type: "STRING", enum: ['Residential', 'Commercial', 'Industrial', 'Agricultural'] },
-              description: { type: "STRING" },
+              name: { type: Type.STRING },
+              type: { type: Type.STRING, enum: ['Residential', 'Commercial', 'Industrial', 'Agricultural'] },
+              description: { type: Type.STRING },
+              p24Url: { type: Type.STRING, description: "The full official Property24 URL if found" },
               address: {
-                type: "OBJECT",
+                type: Type.OBJECT,
                 properties: {
-                  street: { type: "STRING" },
-                  suburb: { type: "STRING" },
-                  city: { type: "STRING" },
-                  province: { type: "STRING" },
-                  country: { type: "STRING" }
+                  street: { type: Type.STRING },
+                  suburb: { type: Type.STRING },
+                  city: { type: Type.STRING },
+                  province: { type: Type.STRING },
+                  country: { type: Type.STRING }
                 },
                 required: ["street", "suburb", "city", "province", "country"]
               },
-              coordinates: { type: "ARRAY", items: { type: "NUMBER" } },
+              coordinates: { type: Type.ARRAY, items: { type: Type.NUMBER } },
               specs: {
-                type: "OBJECT",
+                type: Type.OBJECT,
                 properties: {
-                  standSize: { type: "NUMBER" },
-                  titleType: { type: "STRING", enum: ['Sectional title', 'Full title'] }
+                  standSize: { type: Type.NUMBER },
+                  titleType: { type: Type.STRING, enum: ['Sectional title', 'Full title'] }
                 },
                 required: ["standSize", "titleType"]
               },
               financials: {
-                type: "OBJECT",
+                type: Type.OBJECT,
                 properties: {
-                  purchasePrice: { type: "NUMBER" },
-                  marketValue: { type: "NUMBER" },
-                  bondAmount: { type: "NUMBER" },
-                  deposit: { type: "NUMBER" },
-                  interestRate: { type: "NUMBER" },
-                  termYears: { type: "NUMBER" }
+                  purchasePrice: { type: Type.NUMBER },
+                  marketValue: { type: Type.NUMBER },
+                  bondAmount: { type: Type.NUMBER },
+                  deposit: { type: Type.NUMBER },
+                  interestRate: { type: Type.NUMBER },
+                  termYears: { type: Type.NUMBER }
                 },
                 required: ["purchasePrice", "marketValue", "bondAmount", "interestRate", "termYears"]
               }
             },
             required: ["name", "type", "address", "coordinates", "specs", "financials"]
           }
-        })
+        }
       });
 
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "Import failed");
-      }
-
-      const rawData = await response.json();
+      const text = response.text;
+      if (!text) throw new Error("AI returned no text content");
+      
+      const rawData = JSON.parse(text);
       const newProperty = rawData as Property;
       
       // Coordinate integrity check and auto-correction for South Africa
@@ -225,25 +244,34 @@ export default function App() {
       }
       
       newProperty.id = Math.random().toString(36).substr(2, 9);
-      newProperty.listingNumber = listingNumber;
+      newProperty.listingNumber = finalListingNumber;
       
-      // Construct SEO-friendly P24 URL from AI data
-      const suburbSlug = newProperty.address.suburb.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      const citySlug = newProperty.address.city.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      const provinceSlug = (newProperty.address as any).province.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      // Construct SEO-friendly P24 URL from AI data if not provided
+      if (!newProperty.p24Url) {
+        const suburbSlug = newProperty.address.suburb.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const citySlug = newProperty.address.city.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const provinceSlug = (newProperty.address as any).province?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'gauteng';
+        
+        newProperty.p24Url = `https://www.property24.com/for-sale/${suburbSlug}/${citySlug}/${provinceSlug}/${finalListingNumber}`;
+      }
       
-      newProperty.p24Url = `https://www.property24.com/for-sale/${suburbSlug}/${citySlug}/${provinceSlug}/${listingNumber}`;
-      
-      setProperties(prev => [newProperty, ...prev]);
-      setSelectedProperty(newProperty);
+      setPendingProperty(newProperty);
       setIsImportModalOpen(false);
-      setListingNumber('');
     } catch (error) {
       console.error("Import failed:", error);
     } finally {
       setIsImporting(false);
     }
-  }, [listingNumber, setProperties]);
+  }, [importValue]);
+
+  const confirmAddProperty = useCallback(() => {
+    if (pendingProperty) {
+      setProperties(prev => [pendingProperty, ...prev]);
+      setSelectedProperty(pendingProperty);
+      setPendingProperty(null);
+      setImportValue('');
+    }
+  }, [pendingProperty, setProperties]);
 
   const handleRestoreDefaults = useCallback(() => {
     if (confirm("Restore all mock properties? This will clear your current changes.")) {
@@ -280,40 +308,50 @@ export default function App() {
           candidateSub.id = Math.random().toString(36).substr(2, 9);
         }
       } else {
-        const response = await fetch("/api/ai/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            prompt: `Find technical information about a substation in South Africa based on ${data.type}: ${data.value}. 
-            MAKE A SPECIAL EFFORT to find the Operating Voltage (in kV) and Rated Capacity (in MVA).`,
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+          alert("GEMINI_API_KEY is not configured.");
+          return;
+        }
+
+        const ai = new GoogleGenAI({ apiKey });
+        
+        const subResponse = await ai.models.generateContent({
+          model: "gemini-3-flash-preview",
+          contents: `Find technical information about a substation in South Africa based on ${data.type}: ${data.value}. 
+          MAKE A SPECIAL EFFORT to find the Operating Voltage (in kV) and Rated Capacity (in MVA).`,
+          config: {
+            responseMimeType: "application/json",
             tools: [{ googleSearch: {} }],
-            schema: {
-              type: "OBJECT",
+            responseSchema: {
+              type: Type.OBJECT,
               properties: {
-                name: { type: "STRING" },
-                address: { type: "STRING" },
-                coordinates: { type: "ARRAY", items: { type: "NUMBER" } },
-                status: { type: "STRING", enum: ['Active', 'Under Maintenance', 'Planned'] },
-                capacity: { type: "STRING" },
-                voltageKV: { type: "NUMBER" },
-                mvaCapacity: { type: "NUMBER" },
-                googleMapsUrl: { type: "STRING" }
+                name: { type: Type.STRING },
+                address: { type: Type.STRING },
+                coordinates: { type: Type.ARRAY, items: { type: Type.NUMBER } },
+                status: { type: Type.STRING, enum: ['Active', 'Under Maintenance', 'Planned'] },
+                capacity: { type: Type.STRING },
+                voltageKV: { type: Type.NUMBER },
+                mvaCapacity: { type: Type.NUMBER },
+                googleMapsUrl: { type: Type.STRING }
               },
               required: ["name", "address", "coordinates", "status"]
             }
-          })
+          }
         });
 
-        if (!response.ok) {
-          const err = await response.json();
-          throw new Error(err.error || "Substation add failed");
-        }
-
-        candidateSub = await response.json();
+        const subText = subResponse.text;
+        if (!subText) throw new Error("AI returned no text content for substation");
+        candidateSub = JSON.parse(subText) as Substation;
         
         // Coordinate integrity check
         if (!candidateSub || !candidateSub.coordinates || !Array.isArray(candidateSub.coordinates) || candidateSub.coordinates.length < 2 || isNaN(candidateSub.coordinates[0]) || isNaN(candidateSub.coordinates[1])) {
           if (candidateSub) candidateSub.coordinates = [-26.1311, 28.0536];
+        } else {
+          let [lat, lng] = candidateSub.coordinates;
+          if (lat > 0 && lng < 0) {
+            candidateSub.coordinates = [lng, lat];
+          }
         }
 
         if (candidateSub) candidateSub.id = Math.random().toString(36).substr(2, 9);
@@ -323,40 +361,40 @@ export default function App() {
         setSubstations(prev => [...multipleSubs, ...prev]);
         setIsSubstationModalOpen(false);
       } else if (candidateSub) {
-        // Check for duplicates
-        const isDuplicate = substations.some(existing => {
-          const nameMatch = existing.name.toLowerCase().trim() === candidateSub!.name.toLowerCase().trim();
-          const dist = Math.sqrt(
-            Math.pow(existing.coordinates[0] - candidateSub!.coordinates[0], 2) +
-            Math.pow(existing.coordinates[1] - candidateSub!.coordinates[1], 2)
-          );
-          const proximityMatch = dist < 0.001; // ~111m
-          return nameMatch || proximityMatch;
-        });
-
-        if (isDuplicate) {
-          setPendingSubstation(candidateSub);
-          setIsDuplicateWarningOpen(true);
-        } else {
-          setSubstations(prev => [candidateSub!, ...prev]);
-          setIsSubstationModalOpen(false);
-        }
+        setPendingSubstation(candidateSub);
+        setIsSubstationModalOpen(false);
       }
     } catch (error) {
       console.error("Substation add failed:", error);
     } finally {
       setIsImporting(false);
     }
-  }, [setSubstations, substations]);
+  }, [setSubstations]);
 
-  const confirmAddSubstation = () => {
+  const confirmAddSubstation = useCallback(() => {
     if (pendingSubstation) {
+      // Check for duplicates
+      const isDuplicate = substations.some(existing => {
+        const nameMatch = existing.name.toLowerCase().trim() === pendingSubstation!.name.toLowerCase().trim();
+        const dist = Math.sqrt(
+          Math.pow(existing.coordinates[0] - pendingSubstation!.coordinates[0], 2) +
+          Math.pow(existing.coordinates[1] - pendingSubstation!.coordinates[1], 2)
+        );
+        const proximityMatch = dist < 0.001; // ~111m
+        return nameMatch || proximityMatch;
+      });
+
+      if (isDuplicate && !isDuplicateWarningOpen) {
+        setIsDuplicateWarningOpen(true);
+        return;
+      }
+
       setSubstations(prev => [pendingSubstation, ...prev]);
       setPendingSubstation(null);
       setIsDuplicateWarningOpen(false);
       setIsSubstationModalOpen(false);
     }
-  };
+  }, [pendingSubstation, substations, isDuplicateWarningOpen, setSubstations]);
 
   return (
     <div 
@@ -410,7 +448,7 @@ export default function App() {
                        substations={filteredSubstations}
                        selectedPropertyId={selectedProperty?.id}
                        selectedSubstationId={selectedSubstation?.id}
-                       visiblePropertyIds={visiblePropertyIds}
+                       hiddenPropertyIds={hiddenPropertyIds}
                        onToggleVisibility={togglePropertyVisibility}
                        onSelectProperty={handleSelectProperty}
                        onOpenDetails={handleOpenDetails}
@@ -425,7 +463,7 @@ export default function App() {
                       onClick={(e) => e.stopPropagation()}
                     >
                       <MapComponent 
-                         properties={filteredProperties.filter(p => visiblePropertyIds.includes(p.id))} 
+                         properties={filteredProperties.filter(p => !hiddenPropertyIds.includes(p.id))} 
                          substations={filteredSubstations}
                          onSelectProperty={handleSelectProperty} 
                          selectedProperty={selectedProperty}
@@ -447,7 +485,7 @@ export default function App() {
                     {activeCategory === 'properties' ? (
                       <ListView 
                          properties={filteredProperties} 
-                         visiblePropertyIds={visiblePropertyIds}
+                         hiddenPropertyIds={hiddenPropertyIds}
                          onToggleVisibility={togglePropertyVisibility}
                          onSelectProperty={handleSelectProperty}
                          onOpenDetails={handleOpenDetails}
@@ -493,7 +531,7 @@ export default function App() {
                     </div>
                     {(selectedProperty.p24Url || selectedProperty.listingNumber) && (
                       <a 
-                        href={selectedProperty.p24Url || `https://www.property24.com/for-sale/${selectedProperty.address.suburb.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${selectedProperty.address.city.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${selectedProperty.listingNumber}`} 
+                        href={selectedProperty.p24Url || `https://www.property24.com/for-sale/${selectedProperty.address.suburb.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${selectedProperty.address.city.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${(selectedProperty.address as any).province?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'gauteng'}/${selectedProperty.listingNumber}`} 
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-lg text-[10px] font-bold border border-slate-200 hover:bg-slate-100 transition-colors uppercase tracking-widest"
@@ -564,25 +602,25 @@ export default function App() {
                        <ExternalLink className="w-5 h-5 text-slate-400" />
                     </div>
                     <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                      Enter the Property24 Listing Number. Our system will analyze the baseline and extract regional spatial data.
+                      Enter the Property24 URL or Listing Number. Our system will analyze the baseline and extract regional spatial data.
                     </p>
                  </div>
 
                  <div>
-                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Listing Number</label>
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">P24 Link or Reference</label>
                     <input 
                       type="text" 
-                      placeholder="e.g. 114455667"
+                      placeholder="Paste URL or listing number..."
                       className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-600 focus:bg-white rounded-xl px-5 py-4 text-sm font-semibold outline-none transition-all placeholder:text-slate-300"
-                      value={listingNumber}
-                      onChange={(e) => setListingNumber(e.target.value)}
+                      value={importValue}
+                      onChange={(e) => setImportValue(e.target.value)}
                       disabled={isImporting}
                     />
                  </div>
 
                  <button 
                    onClick={handleImport}
-                   disabled={isImporting || !listingNumber}
+                   disabled={isImporting || !importValue}
                    className="w-full bg-slate-900 disabled:bg-slate-200 text-white font-semibold py-4 rounded-xl shadow-xl hover:bg-slate-800 disabled:shadow-none active:scale-[0.98] transition-all flex items-center justify-center gap-3 text-xs tracking-widest uppercase"
                  >
                    {isImporting ? (
@@ -680,6 +718,188 @@ export default function App() {
                   className="w-full bg-slate-50 text-slate-500 font-semibold py-3.5 rounded-xl hover:bg-slate-100 transition-all text-[11px] tracking-widest uppercase"
                 >
                   Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingProperty && (
+        <div className="fixed inset-0 z-[4000] flex items-center justify-center p-6">
+          <div 
+            onClick={() => setPendingProperty(null)}
+            className="absolute inset-0 bg-slate-900/60"
+          />
+          <div 
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden relative z-10 border border-slate-200"
+          >
+            <div className="p-8">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                     <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
+                     <span className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em]">Data Analysis Complete</span>
+                  </div>
+                  <h3 className="text-2xl font-semibold text-slate-900 tracking-tight">Review Imported Property</h3>
+                </div>
+                <button 
+                  onClick={() => setPendingProperty(null)}
+                  className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-400"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="bg-slate-50 rounded-2xl p-6 mb-8 border border-slate-100">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-lg">{pendingProperty.name}</h4>
+                    <p className="text-xs text-slate-500 font-medium">{pendingProperty.address.suburb}, {pendingProperty.address.city}</p>
+                  </div>
+                  <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                    {pendingProperty.type}
+                  </span>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Price</p>
+                    <p className="text-sm font-bold text-slate-700">R {pendingProperty.financials.purchasePrice.toLocaleString()}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Size</p>
+                    <p className="text-sm font-bold text-slate-700">{pendingProperty.specs.standSize} m²</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={confirmAddProperty}
+                  className="flex-1 bg-slate-900 text-white font-semibold py-4 rounded-xl shadow-xl hover:bg-slate-800 active:scale-[0.98] transition-all flex items-center justify-center gap-3 text-xs tracking-widest uppercase"
+                >
+                  <Check className="w-4 h-4" />
+                  Add to Spatial Database
+                </button>
+                <button 
+                  onClick={() => setPendingProperty(null)}
+                  className="px-6 bg-slate-100 text-slate-500 font-semibold py-4 rounded-xl hover:bg-slate-200 transition-all text-xs tracking-widest uppercase"
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingSubstation && (
+        <div className="fixed inset-0 z-[4000] flex items-center justify-center p-6 text-slate-700">
+          <div 
+            onClick={() => {
+              setPendingSubstation(null);
+              setIsDuplicateWarningOpen(false);
+            }}
+            className="absolute inset-0 bg-slate-900/60"
+          />
+          <div 
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden relative z-10 border border-slate-200"
+          >
+            <div className="p-8">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                     <span className={cn("w-1.5 h-1.5 rounded-full", isDuplicateWarningOpen ? "bg-amber-500" : "bg-indigo-500")} />
+                     <span className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em]">
+                       {isDuplicateWarningOpen ? "Duplicate Detection" : "Entity Analysis Ready"}
+                     </span>
+                  </div>
+                  <h3 className="text-2xl font-semibold text-slate-900 tracking-tight">
+                    {isDuplicateWarningOpen ? "Substation Duplicate Warning" : "Review Substation Details"}
+                  </h3>
+                </div>
+                <button 
+                  onClick={() => {
+                    setPendingSubstation(null);
+                    setIsDuplicateWarningOpen(false);
+                  }}
+                  className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-400"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {isDuplicateWarningOpen && (
+                <div className="mb-6 p-4 bg-amber-50 rounded-2xl border border-amber-100 flex gap-4 items-start">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+                  <div>
+                    <h4 className="text-xs font-black text-amber-900 uppercase tracking-widest mb-1">Conflict Detected</h4>
+                    <p className="text-[11px] text-amber-700 font-medium leading-relaxed">
+                      This substation appears to already exist in your catalog (either by name or extreme proximity). Adding it may create redundant data.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-slate-50 rounded-2xl p-6 mb-8 border border-slate-100">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="min-w-0 pr-4">
+                    <h4 className="font-bold text-slate-900 text-lg truncate">{pendingSubstation.name}</h4>
+                    <p className="text-xs text-slate-500 font-medium truncate">{pendingSubstation.address}</p>
+                  </div>
+                  <div className="shrink-0 flex flex-col items-end gap-1">
+                    <span className="px-2.5 py-1 bg-amber-100 text-amber-700 rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                      Substation
+                    </span>
+                    {pendingSubstation.voltageKV && (
+                      <span className="px-2.5 py-1 bg-slate-900 text-white rounded-lg text-[10px] font-bold">
+                        {pendingSubstation.voltageKV} kV
+                      </span>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Capacity</p>
+                    <p className="text-sm font-bold text-slate-700">{pendingSubstation.mvaCapacity ? `${pendingSubstation.mvaCapacity} MVA` : (pendingSubstation.capacity || 'N/A')}</p>
+                  </div>
+                  <div className="space-y-1 text-right">
+                     {pendingSubstation.googleMapsUrl && (
+                        <a 
+                          href={pendingSubstation.googleMapsUrl} 
+                          target="_blank" 
+                          referrerPolicy="no-referrer"
+                          className="text-[10px] font-bold text-indigo-600 hover:underline flex flex-col items-end"
+                        >
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">External Data</span>
+                          View on Google Maps
+                        </a>
+                     )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={confirmAddSubstation}
+                  className={cn(
+                    "flex-1 font-semibold py-4 rounded-xl shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-3 text-xs tracking-widest uppercase",
+                    isDuplicateWarningOpen ? "bg-amber-600 hover:bg-amber-700 text-white" : "bg-slate-900 hover:bg-slate-800 text-white"
+                  )}
+                >
+                  <Check className="w-4 h-4" />
+                  {isDuplicateWarningOpen ? "Add Anyway" : "Confirm & Import"}
+                </button>
+                <button 
+                  onClick={() => {
+                    setPendingSubstation(null);
+                    setIsDuplicateWarningOpen(false);
+                  }}
+                  className="px-6 bg-slate-100 text-slate-500 font-semibold py-4 rounded-xl hover:bg-slate-200 transition-all text-xs tracking-widest uppercase"
+                >
+                  Discard
                 </button>
               </div>
             </div>

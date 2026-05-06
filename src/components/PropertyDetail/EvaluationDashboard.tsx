@@ -108,6 +108,13 @@ export default function EvaluationDashboard({
     setIsEditing(false);
   };
 
+  const getAbsoluteUrl = (url?: string) => {
+    if (!url) return '';
+    const trimmed = url.trim();
+    if (trimmed.startsWith('http')) return trimmed;
+    return `https://${trimmed}`;
+  };
+
   const { name, type, listingNumber, p24Url, agent, agentPhone, description } = isEditing ? editedProperty : property;
 
   return (
@@ -119,12 +126,20 @@ export default function EvaluationDashboard({
               <div className="flex items-center gap-3">
                  <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-1 rounded">{type}</span>
                  {isEditing ? (
-                    <input 
-                      value={p24Url || ''}
-                      onChange={(e) => handleFieldUpdate('p24Url', e.target.value)}
-                      className="text-[10px] text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-200 outline-none w-48"
-                      placeholder="Property24 Link"
-                    />
+                    <div className="flex gap-2">
+                       <input 
+                         value={p24Url || ''}
+                         onChange={(e) => handleFieldUpdate('p24Url', e.target.value)}
+                         className="text-[10px] text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-200 outline-none w-40"
+                         placeholder="P24 Link"
+                       />
+                       <input 
+                         value={editedProperty.googleMapsUrl || ''}
+                         onChange={(e) => handleFieldUpdate('googleMapsUrl', e.target.value)}
+                         className="text-[10px] text-blue-400 bg-slate-50 px-2 py-1 rounded border border-slate-200 outline-none w-40"
+                         placeholder="Maps Link"
+                       />
+                    </div>
                  ) : onRefineProperty && (
                     <button 
                       onClick={() => onRefineProperty(property)}
@@ -206,7 +221,7 @@ export default function EvaluationDashboard({
                  ) : (
                     item.isP24 && listingNumber ? (
                       <a 
-                        href={p24Url || `https://www.property24.com/for-sale/${address.suburb.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${address.city.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${listingNumber}`}
+                        href={p24Url || `https://www.property24.com/for-sale/${address.suburb.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${address.city.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${(address as any).province?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'gauteng'}/${listingNumber}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-lg font-bold text-blue-600 hover:underline flex items-center gap-1.5"
@@ -360,7 +375,7 @@ export default function EvaluationDashboard({
                     ) : (
                        <div className="flex gap-2">
                           {property.googleMapsUrl && (
-                             <a href={property.googleMapsUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1 font-bold">
+                             <a href={getAbsoluteUrl(property.googleMapsUrl)} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1 font-bold">
                                 Map <ExternalLink className="w-3 h-3" />
                              </a>
                           )}

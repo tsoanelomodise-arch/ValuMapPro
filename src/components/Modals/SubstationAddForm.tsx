@@ -10,7 +10,7 @@ interface SubstationAddFormProps {
 }
 
 export default function SubstationAddForm({ onAdd, isSubmitting }: SubstationAddFormProps) {
-  const [type, setType] = useState<'address' | 'url' | 'coords' | 'ai_search'>('address');
+  const [type, setType] = useState<'address' | 'url' | 'coords' | 'ai_search'>('ai_search');
   const [value, setValue] = useState('');
   const [searchResults, setSearchResults] = useState<AISubstation[]>([]);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
@@ -53,6 +53,15 @@ export default function SubstationAddForm({ onAdd, isSubmitting }: SubstationAdd
       let safeCoords = aiSub.coordinates;
       if (!safeCoords || !Array.isArray(safeCoords) || safeCoords.length < 2 || isNaN(safeCoords[0]) || isNaN(safeCoords[1])) {
         safeCoords = [-26.1311, 28.0536];
+      } else {
+        let [lat, lng] = safeCoords;
+        // South Africa specific coordinate correction: Lats are negative, Lngs are positive
+        if (lat > 0 && lng < 0) {
+          [lat, lng] = [lng, lat];
+        } else if (lat > 0 && lng > 0 && lat < 18) { // Likely swapped lat/lng for SA
+           [lat, lng] = [lng, lat];
+        }
+        safeCoords = [lat, lng];
       }
       return {
         id: Math.random().toString(36).substr(2, 9),
@@ -60,19 +69,25 @@ export default function SubstationAddForm({ onAdd, isSubmitting }: SubstationAdd
         address: aiSub.address,
         coordinates: safeCoords as [number, number],
         status: 'Active',
-        capacity: aiSub.description || 'Verified via AI',
+        capacity: aiSub.mvaCapacity ? `${aiSub.mvaCapacity} MVA` : (aiSub.description || 'Verified via AI'),
         voltageKV: aiSub.voltageKV,
         mvaCapacity: aiSub.mvaCapacity
       };
     });
 
-    onAdd({ type: 'direct', value: 'Multiple', payload: subs });
+    if (subs.length === 1) {
+      onAdd({ type: 'direct', value: subs[0].name, payload: subs[0] });
+    } else {
+      onAdd({ type: 'direct', value: 'Imported from AI Search', payload: subs });
+    }
+    setSearchResults([]);
+    setSelectedIndices(new Set());
   };
 
   return (
     <div className="space-y-4">
       <div className="flex p-1 bg-slate-100 rounded-xl overflow-x-auto custom-scrollbar">
-        {(['address', 'url', 'coords', 'ai_search'] as const).map((t) => (
+        {(['ai_search', 'address', 'url', 'coords'] as const).map((t) => (
           <button
             key={t}
             onClick={() => {
@@ -84,7 +99,7 @@ export default function SubstationAddForm({ onAdd, isSubmitting }: SubstationAdd
               type === t ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
             )}
           >
-            {t.replace('_', ' ')}
+            {t === 'ai_search' ? 'AI Guided Search' : t.replace('_', ' ')}
           </button>
         ))}
       </div>
@@ -124,19 +139,31 @@ export default function SubstationAddForm({ onAdd, isSubmitting }: SubstationAdd
                       key={i}
                       onClick={() => toggleSelect(i)}
                       className={cn(
-                        "p-3 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-between group",
+                        "p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between group",
                         selectedIndices.has(i) ? "bg-indigo-50 border-indigo-200" : "bg-white border-slate-100 hover:border-slate-200"
                       )}
                     >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-black text-slate-900 uppercase truncate">{sub.name}</p>
-                        <p className="text-[10px] text-slate-500 truncate italic">{sub.address}</p>
+                      <div className="flex-1 min-w-0 pr-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className="text-xs font-black text-slate-900 uppercase truncate">{sub.name}</p>
+                          {sub.voltageKV && (
+                            <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[8px] font-bold">
+                              {sub.voltageKV}kV
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-500 truncate italic mb-1">{sub.address}</p>
+                        {sub.mvaCapacity && (
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">
+                            Capacity: {sub.mvaCapacity} MVA
+                          </p>
+                        )}
                       </div>
                       <div className={cn(
-                        "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all",
+                        "w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0",
                         selectedIndices.has(i) ? "bg-indigo-600 border-indigo-600 text-white" : "border-slate-200 bg-white group-hover:border-indigo-400"
                       )}>
-                        {selectedIndices.has(i) && <Check className="w-3 h-3 font-black" />}
+                        {selectedIndices.has(i) && <Check className="w-4 h-4 font-black" />}
                       </div>
                     </div>
                   ))}

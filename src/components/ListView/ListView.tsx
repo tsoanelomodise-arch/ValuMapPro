@@ -5,7 +5,7 @@ import { MapPin, Ruler, Scaling, ArrowUpRight, Trash2, Edit3 } from 'lucide-reac
 
 interface ListViewProps {
   properties: Property[];
-  visiblePropertyIds: string[];
+  hiddenPropertyIds: string[];
   onToggleVisibility: (id: string) => void;
   onSelectProperty: (property: Property) => void;
   onOpenDetails: (property: Property) => void;
@@ -16,7 +16,7 @@ interface ListViewProps {
 
 export default function ListView({ 
   properties, 
-  visiblePropertyIds,
+  hiddenPropertyIds,
   onToggleVisibility,
   onSelectProperty, 
   onOpenDetails, 
@@ -52,13 +52,13 @@ export default function ListView({
                 properties.map((property) => (
                   <tr 
                     key={property.id} 
-                    className={`hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50 ${selectedProperty?.id === property.id ? 'bg-blue-50/50' : ''} ${!visiblePropertyIds.includes(property.id) ? 'opacity-60 grayscale-[0.5]' : ''}`}
+                    className={`hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50 ${selectedProperty?.id === property.id ? 'bg-blue-50/50' : ''} ${hiddenPropertyIds.includes(property.id) ? 'opacity-60 grayscale-[0.5]' : ''}`}
                     onClick={() => onSelectProperty(property)}
                   >
                     <td className="px-6 py-5 text-center" onClick={(e) => e.stopPropagation()}>
                       <input 
                         type="checkbox"
-                        checked={visiblePropertyIds.includes(property.id)}
+                        checked={!hiddenPropertyIds.includes(property.id)}
                         onChange={() => onToggleVisibility(property.id)}
                         className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer mx-auto"
                       />

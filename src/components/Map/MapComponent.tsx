@@ -819,7 +819,7 @@ export default function MapComponent({
               key={`${property.id}-${property.coordinates[0]}-${property.coordinates[1]}`}
               position={property.coordinates as [number, number]}
               icon={createColoredIcon(
-                CLASSIC_RED,
+                PROPERTY_TYPE_COLORS[property.type] || CLASSIC_RED,
                 selectedProperty?.id === property.id,
                 property.name,
                 distanceLabel,

@@ -1,3 +1,13 @@
+import { GoogleGenAI, Type } from "@google/genai";
+
+const getAI = () => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.warn("GEMINI_API_KEY is not defined in the environment.");
+    return null;
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 export interface AISubstation {
   name: string;
@@ -9,32 +19,46 @@ export interface AISubstation {
 }
 
 export async function searchSubstations(area: string): Promise<AISubstation[]> {
+  const ai = getAI();
+  if (!ai) return [];
+
   try {
-    const response = await fetch("/api/ai/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: `Find real-world Eskom electrical substations located in or around the area: ${area}. 
-        Return a list of substations with their names, approximate physical addresses, and precise GPS coordinates (Latitude, Longitude).
-        MAKE A SPECIAL EFFORT to find the Operating Voltage (in kV) and Rated Capacity (in MVA) for each.
-        Focus on major distribution and transmission substations.`,
-        schema: {
-          type: "OBJECT",
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `SEARCH TASK: Find ACTUAL electrical substations in or near ${area}, South Africa.
+      
+      1. Use Google Search to find current Eskom and municipal substation names.
+      2. Identify at least 3-5 major substations if possible.
+      3. For each substation, provide:
+         - Official Name
+         - Approximate Address or Location
+         - PRECISE GPS Coordinates as [Latitude, Longitude] (Strictly decimal format, e.g., [-26.123, 28.456])
+         - Operating Voltage in kV (e.g., 11, 88, 132, 275, 400)
+         - Rated Capacity in MVA
+         - A brief technical description
+      
+      Output ONLY valid JSON according to the schema.`,
+      config: {
+        responseMimeType: "application/json",
+        tools: [{ googleSearch: {} }],
+        responseSchema: {
+          type: Type.OBJECT,
           properties: {
             substations: {
-              type: "ARRAY",
+              type: Type.ARRAY,
               items: {
-                type: "OBJECT",
+                type: Type.OBJECT,
                 properties: {
-                  name: { type: "STRING" },
-                  address: { type: "STRING" },
-                  coordinates: {
-                    type: "ARRAY",
-                    items: { type: "NUMBER" }
+                  name: { type: Type.STRING },
+                  address: { type: Type.STRING },
+                  coordinates: { 
+                    type: Type.ARRAY,
+                    items: { type: Type.NUMBER },
+                    description: "Array of [latitude, longitude]"
                   },
-                  description: { type: "STRING" },
-                  voltageKV: { type: "NUMBER" },
-                  mvaCapacity: { type: "NUMBER" }
+                  voltageKV: { type: Type.NUMBER },
+                  mvaCapacity: { type: Type.NUMBER },
+                  description: { type: Type.STRING }
                 },
                 required: ["name", "address", "coordinates"]
               }
@@ -42,16 +66,11 @@ export async function searchSubstations(area: string): Promise<AISubstation[]> {
           },
           required: ["substations"]
         }
-      })
+      }
     });
 
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || "Failed to search substations");
-    }
-
-    const result = await response.json();
-    return result.substations || [];
+    const text = response.text;
+    return JSON.parse(text || '{"substations": []}').substations || [];
   } catch (error) {
     console.error("Error searching substations with AI:", error);
     return [];
