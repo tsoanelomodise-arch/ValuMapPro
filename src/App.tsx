@@ -24,7 +24,7 @@ import {
   Check,
   Zap
 } from 'lucide-react';
-import { searchSubstations, searchSubstationsByNearby, AISubstation } from './services/geminiService';
+import { searchSubstations, searchSubstationsByArea, AISubstation } from './services/geminiService';
 import { GoogleGenAI, Type } from "@google/genai";
 import { cn } from './lib/utils';
 
@@ -161,7 +161,7 @@ export default function App() {
       s.status.toLowerCase().includes(searchQuery.toLowerCase())
     ), [substations, searchQuery]);
 
-  const handleDiscoverNearby = useCallback(async (center: [number, number]) => {
+  const handleDiscoverNearby = useCallback(async (bounds: { north: number, south: number, east: number, west: number }) => {
     if (discoveryAbortControllerRef.current) {
       discoveryAbortControllerRef.current.abort();
     }
@@ -170,7 +170,7 @@ export default function App() {
 
     setIsDiscovering(true);
     try {
-      const results = await searchSubstationsByNearby(center[0], center[1]);
+      const results = await searchSubstationsByArea(bounds.north, bounds.south, bounds.east, bounds.west);
       
       if (controller.signal.aborted) return;
 

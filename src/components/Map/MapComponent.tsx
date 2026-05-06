@@ -139,7 +139,7 @@ interface MapComponentProps {
   onSelectSubstation?: (substation: Substation) => void;
   selectedSubstation?: Substation | null;
   onAddSubstation?: (substation: Substation) => void;
-  onDiscoverNearby?: (center: [number, number]) => void;
+  onDiscoverNearby?: (bounds: { north: number, south: number, east: number, west: number }) => void;
   onCancelDiscovery?: () => void;
   onClearCandidates?: () => void;
   isDiscovering?: boolean;
@@ -1066,8 +1066,13 @@ export default function MapComponent({
                   if (isDiscovering) {
                     onCancelDiscovery?.();
                   } else if (mapInstanceRef.current) {
-                    const center = mapInstanceRef.current.getCenter();
-                    onDiscoverNearby([center.lat, center.lng]);
+                    const bounds = mapInstanceRef.current.getBounds();
+                    onDiscoverNearby?.({
+                      north: bounds.getNorth(),
+                      south: bounds.getSouth(),
+                      east: bounds.getEast(),
+                      west: bounds.getWest()
+                    });
                   }
                 }}
                 className={cn(

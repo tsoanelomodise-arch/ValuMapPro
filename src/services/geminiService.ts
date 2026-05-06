@@ -67,15 +67,19 @@ export async function searchSubstations(area: string): Promise<AISubstation[]> {
   }
 }
 
-export async function searchSubstationsByNearby(lat: number, lng: number): Promise<AISubstation[]> {
+export async function searchSubstationsByArea(north: number, south: number, east: number, west: number): Promise<AISubstation[]> {
   const ai = getAI();
   if (!ai) return [];
 
   try {
     const response = await ai.models.generateContent({
       model: "gemini-flash-latest",
-      contents: `Find 5-8 actual electrical substations near coordinates ${lat}, ${lng} in South Africa.
-      If those coordinates point to a specific suburb or city, search within that entire area.
+      contents: `Find 5-10 actual electrical substations strictly within this geographic bounding box in South Africa:
+      North: ${north}
+      South: ${south}
+      East: ${east}
+      West: ${west}
+      
       Return the official name, address, coordinates [lat, lng], voltage (kV), capacity (MVA), and a short description.
       Use Google Search results.`,
       config: {
@@ -112,7 +116,7 @@ export async function searchSubstationsByNearby(lat: number, lng: number): Promi
     const text = response.text;
     return JSON.parse(text || '{"substations": []}').substations || [];
   } catch (error) {
-    console.error("Error discovering substations with AI:", error);
+    console.error("Error discovering substations in area with AI:", error);
     return [];
   }
 }
