@@ -699,10 +699,7 @@ export default function App() {
 
         <div className="flex-1 flex overflow-hidden relative">
           {/* Spatial Catalog Slide-in/out implementation without problematic motion components for reliability */}
-          <div className={cn(
-            "flex-1 flex flex-col p-6 gap-4 overflow-hidden transition-all duration-500 ease-in-out",
-            isSidebarOpen ? "pl-6" : "pl-6" // Adjust as needed
-          )}>
+          <div className="flex-1 flex flex-col p-6 gap-4 overflow-hidden">
              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <button 
@@ -764,9 +761,9 @@ export default function App() {
                  <div className="absolute inset-0 flex gap-4">
                    <div className={cn(
                      "h-full overflow-hidden shrink-0 border border-slate-100 rounded-2xl shadow-sm transition-all duration-500 ease-in-out bg-white",
-                     isSpatialPanelOpen ? "w-[320px] opacity-100 translate-x-0" : "w-0 opacity-0 -translate-x-20 pointer-events-none"
+                     isSpatialPanelOpen ? "w-80 opacity-100" : "w-0 opacity-0 pointer-events-none"
                    )}>
-                     <div className="w-[320px] h-full"> {/* Inner fixed width to prevent content squishing during transition */}
+                     <div className="w-80 h-full"> {/* Inner fixed width to prevent content squishing during transition */}
                        <SpatialCatalog 
                          properties={filteredProperties}
                          candidateProperties={filteredCandidateProperties}
@@ -1165,7 +1162,7 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Price</p>
-                    <p className="text-sm font-bold text-slate-700">R {pendingProperty.financials.purchasePrice.toLocaleString()}</p>
+                    <p className="text-sm font-bold text-slate-700">R {pendingProperty.financials.purchasePrice?.toLocaleString() || '0'}</p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Size</p>

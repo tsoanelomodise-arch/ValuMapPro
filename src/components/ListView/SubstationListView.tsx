@@ -107,6 +107,7 @@ export default function SubstationListView({
                   </div>
                 </th>
                 <th className="px-4 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Substation</th>
+                <th className="px-4 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-center">Owner</th>
                 <th className="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-center">Status</th>
                 <th className="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-center">Capacity</th>
                 <th className="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-center">Voltage</th>
@@ -117,7 +118,7 @@ export default function SubstationListView({
             <tbody className="divide-y divide-slate-50">
               {substations.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-slate-400 text-[10px] font-medium leading-relaxed">
+                  <td colSpan={8} className="px-6 py-12 text-center text-slate-400 text-[10px] font-medium leading-relaxed">
                     No results found in current index.
                   </td>
                 </tr>
@@ -152,8 +153,14 @@ export default function SubstationListView({
                               </span>
                             )}
                           </div>
-                          <p className="text-[11px] text-slate-500 font-medium">{sub.owner || 'Distribution Node'}</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{sub.voltageKV ? `${sub.voltageKV} kV` : 'N/A'}</p>
                         </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-5 text-center">
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-[11px] font-bold text-slate-700 tracking-tight">{sub.owner || 'N/A'}</span>
+                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-[0.1em]">Utility Operator</span>
                       </div>
                     </td>
                     <td className="px-6 py-5 text-center">

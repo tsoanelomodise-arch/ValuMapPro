@@ -79,7 +79,7 @@ export default function MapDetailsOverlay({
                 <div className="mt-1 w-1 h-1 rounded-full bg-slate-400 shrink-0" />
                 <div className="flex flex-wrap gap-x-2 gap-y-0.5">
                   <span className="font-bold text-slate-500 uppercase tracking-tighter text-[9px]">Asking Price:</span>
-                  <span className="text-slate-900 font-bold">R {property.financials.purchasePrice.toLocaleString()}</span>
+                  <span className="text-slate-900 font-bold">R {property.financials.purchasePrice?.toLocaleString() || '0'}</span>
                 </div>
               </div>
 

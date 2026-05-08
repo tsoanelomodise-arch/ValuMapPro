@@ -460,7 +460,7 @@ export default function EvaluationDashboard({
                        />
                     ) : (
                        <span className="text-slate-900 font-bold tabular-nums">
-                          {property.coordinates[0].toFixed(4)}, {property.coordinates[1].toFixed(4)}
+                          {property.coordinates && property.coordinates.length >= 2 ? `${property.coordinates[0].toFixed(4)}, ${property.coordinates[1].toFixed(4)}` : 'N/A'}
                        </span>
                     )}
                  </div>

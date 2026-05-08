@@ -843,7 +843,7 @@ export default function MapComponent({
 
         if (prop.financials?.purchasePrice) {
           pdf.setTextColor(5, 150, 105);
-          pdf.text(`Price: R ${prop.financials.purchasePrice.toLocaleString()}`, 140, currentY + 25);
+          pdf.text(`Price: R ${prop.financials.purchasePrice?.toLocaleString() || '0'}`, 140, currentY + 25);
         }
 
         currentY += 40;
