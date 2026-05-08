@@ -214,7 +214,7 @@ const createColoredIcon = (color: string, isSelected: boolean = false, label?: s
         ${propertyId ? `data-property-id="${propertyId}"` : ''} 
         ${substationId ? `data-substation-id="${substationId}"` : ''}
       >
-        <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-lg" style="width: ${width}px; height: ${height}px; display: block;">
+        <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-lg" preserveAspectRatio="xMidYMid meet" style="width: ${width}px; height: ${height}px; display: block;">
           <path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 34 12 34C12 34 24 21 24 12C24 5.37 18.63 0 12 0Z" fill="${color}" stroke="white" stroke-width="1.5"/>
           <circle cx="12" cy="12" r="3.5" fill="white" opacity="0.9"/>
         </svg>
@@ -254,7 +254,7 @@ const createCandidateIcon = (isSelected: boolean = false, label?: string, isProp
     html: `
       <div class="relative flex flex-col items-center" style="width: ${width}px; height: ${height}px; overflow: visible;">
         <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-${isProperty ? 'emerald' : 'slate'}-500/20 rounded-full blur-md animate-pulse"></div>
-        <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-2xl relative z-10" style="width: ${width}px; height: ${height}px; display: block;">
+        <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-2xl relative z-10" preserveAspectRatio="xMidYMid meet" style="width: ${width}px; height: ${height}px; display: block;">
           <path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 34 12 34C12 34 24 21 24 12C24 5.37 18.63 0 12 0Z" fill="${color}" stroke="white" stroke-width="2"/>
           <path d="M12 8V16M8 12H16" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
         </svg>
@@ -419,7 +419,7 @@ const CandidateSubstationLayerGroup = ({
 }) => {
   return (
     <LayerGroup>
-      {substations.map(substation => (
+      {substations.filter(s => s.coordinates && Array.isArray(s.coordinates)).map(substation => (
         <Marker
           key={`candidate-${substation.id}`}
           position={substation.coordinates}
@@ -530,11 +530,12 @@ export default function MapComponent({
   const propertyDistances = React.useMemo(() => {
     if (!substations || substations.length === 0) return [];
     
-    return properties.map(property => {
+    return properties.filter(p => p.coordinates && Array.isArray(p.coordinates)).map(property => {
       let minDistance = Infinity;
       let closestSub = substations[0];
       
       substations.forEach(sub => {
+        if (!sub.coordinates || !Array.isArray(sub.coordinates)) return;
         const d = calculateDistance(
           property.coordinates[0],
           property.coordinates[1],

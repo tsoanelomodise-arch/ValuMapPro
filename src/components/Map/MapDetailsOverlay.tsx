@@ -1,6 +1,5 @@
 import React from 'react';
 import { X, Navigation2, Zap, Home, ArrowRight, User, Phone, Briefcase, Hash, ExternalLink, Mountain } from 'lucide-react';
-import { motion } from 'motion/react';
 import { Property, Substation } from '../../types';
 import { cn } from '../../lib/utils';
 
@@ -33,16 +32,11 @@ export default function MapDetailsOverlay({
 
   if (property) {
     return (
-      <motion.div 
-        drag
-        dragMomentum={false}
+      <div 
         className={cn(
-          "absolute top-4 right-4 z-[1000] cursor-move",
+          "absolute top-4 right-4 z-[1000] cursor-move animate-in fade-in zoom-in-95 duration-200",
           isFullscreen ? "w-80 md:w-96" : "w-72"
         )}
-        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 10 }}
         {...props}
       >
         <div className="bg-white overflow-hidden rounded-xl shadow-xl border border-slate-200 max-h-[calc(100vh-2rem)] overflow-y-auto pointer-events-auto">
@@ -64,6 +58,22 @@ export default function MapDetailsOverlay({
             onClick={() => onOpenDetails(property)}
           >
             <div className="space-y-2.5">
+              {/* External Listing Link - High Visibility */}
+              {property.p24Url && (
+                <div className="mb-2">
+                  <a 
+                    href={property.p24Url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center justify-center gap-2 bg-slate-900 border border-slate-900 text-white hover:bg-slate-800 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-lg shadow-slate-200"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    View Property24 Listing
+                  </a>
+                </div>
+              )}
+              
               {/* Core Financials & Stats */}
               <div className="flex items-start gap-2.5 text-[11px]">
                 <div className="mt-1 w-1 h-1 rounded-full bg-slate-400 shrink-0" />
@@ -133,7 +143,7 @@ export default function MapDetailsOverlay({
                     {property.address.street}, {property.address.suburb}, {property.address.city}
                   </div>
                   <div className="font-mono text-[9px] text-slate-400">
-                    GPS: {property.coordinates[0].toFixed(6)}, {property.coordinates[1].toFixed(6)}
+                    GPS: {property.coordinates && Array.isArray(property.coordinates) ? `${property.coordinates[0].toFixed(6)}, ${property.coordinates[1].toFixed(6)}` : 'Unknown'}
                   </div>
                 </div>
               </div>
@@ -145,22 +155,17 @@ export default function MapDetailsOverlay({
             </div>
           </div>
         </div>
-      </motion.div>
+      </div>
     );
   }
 
   if (substation) {
     return (
-      <motion.div 
-        drag
-        dragMomentum={false}
+      <div 
         className={cn(
-          "absolute top-4 right-4 z-[1000] cursor-move",
+          "absolute top-4 right-4 z-[1000] cursor-move animate-in fade-in zoom-in-95 duration-200",
           isFullscreen ? "w-72" : "w-64"
         )}
-        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 10 }}
         {...props}
       >
         <div className="bg-white overflow-hidden rounded-2xl shadow-2xl border border-slate-200 pointer-events-auto">
@@ -219,7 +224,7 @@ export default function MapDetailsOverlay({
             </div>
           </div>
         </div>
-      </motion.div>
+      </div>
     );
   }
 

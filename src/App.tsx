@@ -37,7 +37,8 @@ import {
   AISubstation 
 } from './services/geminiService';
 import { cn } from './lib/utils';
-import { motion, AnimatePresence } from 'motion/react';
+// Remove motion import if causing blank screen issues
+// import { motion, AnimatePresence } from 'motion/react';
 
 // Custom hook for local storage persistence
 function usePersistedState<T>(key: string, defaultValue: T | (() => T)) {
@@ -112,7 +113,7 @@ export default function App() {
   const [propertiesToDelete, setPropertiesToDelete] = useState<string[] | null>(null);
   const [substationsToDelete, setSubstationsToDelete] = useState<string[] | null>(null);
   const [isSubstationModalOpen, setIsSubstationModalOpen] = useState(false);
-  const [isSpatialPanelOpen, setIsSpatialPanelOpen] = useState(true);
+  const [isSpatialPanelOpen, setIsSpatialPanelOpen] = usePersistedState('is-spatial-panel-open', true);
   const [substationToEdit, setSubstationToEdit] = useState<Substation | null>(null);
   const [substationToDelete, setSubstationToDelete] = useState<null | string>(null);
   const [isDuplicateWarningOpen, setIsDuplicateWarningOpen] = useState(false);
@@ -302,11 +303,16 @@ export default function App() {
             if (!finalCoords || !Array.isArray(finalCoords) || isNaN(finalCoords[0])) {
                console.warn("Using jittered anchor coordinates for property due to missing precise coordinates:", res.name);
                coordinatesFlag = 'approximate';
+               
+               const subCoords = (selectedSubstation && selectedSubstation.coordinates && Array.isArray(selectedSubstation.coordinates)) 
+                 ? selectedSubstation.coordinates 
+                 : [-26.1, 28.1] as [number, number]; // Fallback to generic Gauteng if everything fails
+
                // Add 500m-1km random jitter relative to substation
                const jitter = () => (Math.random() - 0.5) * 0.01; 
                finalCoords = [
-                 selectedSubstation.coordinates[0] + jitter(),
-                 selectedSubstation.coordinates[1] + jitter()
+                 subCoords[0] + jitter(),
+                 subCoords[1] + jitter()
                ];
             }
 
@@ -328,11 +334,12 @@ export default function App() {
             console.log("Adding candidate property:", newCandidate.name, finalCoords);
             setCandidateProperties(prev => {
               // Avoid duplicates by name and approx coordinates
-              const isDuplicate = prev.some(existing => 
-                existing.name.toLowerCase() === newCandidate.name.toLowerCase() ||
+              const isDuplicate = prev.some(existing => {
+                if (!existing.coordinates || !newCandidate.coordinates) return existing.name.toLowerCase() === newCandidate.name.toLowerCase();
+                return existing.name.toLowerCase() === newCandidate.name.toLowerCase() ||
                 (Math.abs(existing.coordinates[0] - newCandidate.coordinates[0]) < 0.0001 && 
-                 Math.abs(existing.coordinates[1] - newCandidate.coordinates[1]) < 0.0001)
-              );
+                 Math.abs(existing.coordinates[1] - newCandidate.coordinates[1]) < 0.0001);
+              });
               if (isDuplicate) return prev;
               return [...prev, newCandidate];
             });
@@ -401,16 +408,18 @@ export default function App() {
 
       // Filter out candidates that are already in our substations list or already in candidates
       const filteredCandidates = newCandidates.filter(candidate => {
-        const inMain = substations.some(s => 
-          s.name.toLowerCase() === candidate.name.toLowerCase() ||
+        const inMain = substations.some(s => {
+          if (!s.coordinates || !candidate.coordinates) return s.name.toLowerCase() === candidate.name.toLowerCase();
+          return s.name.toLowerCase() === candidate.name.toLowerCase() ||
           (Math.abs(s.coordinates[0] - candidate.coordinates[0]) < 0.0001 && 
-           Math.abs(s.coordinates[1] - candidate.coordinates[1]) < 0.0001)
-        );
-        const inCandidates = candidateSubstations.some(s => 
-          s.name.toLowerCase() === candidate.name.toLowerCase() ||
+           Math.abs(s.coordinates[1] - candidate.coordinates[1]) < 0.0001);
+        });
+        const inCandidates = candidateSubstations.some(s => {
+          if (!s.coordinates || !candidate.coordinates) return s.name.toLowerCase() === candidate.name.toLowerCase();
+          return s.name.toLowerCase() === candidate.name.toLowerCase() ||
           (Math.abs(s.coordinates[0] - candidate.coordinates[0]) < 0.0001 && 
-           Math.abs(s.coordinates[1] - candidate.coordinates[1]) < 0.0001)
-        );
+           Math.abs(s.coordinates[1] - candidate.coordinates[1]) < 0.0001);
+        });
         return !inMain && !inCandidates;
       });
 
@@ -537,7 +546,7 @@ export default function App() {
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return;
       console.error("Import failed:", error);
-      addNotification("AI import failed. Please check the listing details or try again later.", 'error');
+      addNotification(`AI import failed: ${error instanceof Error ? error.message : 'Unknown error'}. Please check your API key and URL.`, 'error');
     } finally {
       if (!importAbortControllerRef.current || importAbortControllerRef.current === controller) {
         setIsImporting(false);
@@ -638,9 +647,12 @@ export default function App() {
       // Check for duplicates
       const isDuplicate = substations.some(existing => {
         const nameMatch = existing.name.toLowerCase().trim() === pendingSubstation!.name.toLowerCase().trim();
+        
+        if (!existing.coordinates || !pendingSubstation?.coordinates) return nameMatch;
+        
         const dist = Math.sqrt(
-          Math.pow(existing.coordinates[0] - pendingSubstation!.coordinates[0], 2) +
-          Math.pow(existing.coordinates[1] - pendingSubstation!.coordinates[1], 2)
+          Math.pow(existing.coordinates[0] - pendingSubstation.coordinates[0], 2) +
+          Math.pow(existing.coordinates[1] - pendingSubstation.coordinates[1], 2)
         );
         const proximityMatch = dist < 0.001; // ~111m
         return nameMatch || proximityMatch;
@@ -686,115 +698,126 @@ export default function App() {
         />
 
         <div className="flex-1 flex overflow-hidden relative">
-          <div className="flex-1 flex flex-col p-6 gap-4 overflow-hidden">
+          {/* Spatial Catalog Slide-in/out implementation without problematic motion components for reliability */}
+          <div className={cn(
+            "flex-1 flex flex-col p-6 gap-4 overflow-hidden transition-all duration-500 ease-in-out",
+            isSidebarOpen ? "pl-6" : "pl-6" // Adjust as needed
+          )}>
              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <h1 className="text-xl font-bold text-slate-800 tracking-tight">
-                    {view === 'map' ? 'Spatial Intelligence View' : (activeCategory === 'properties' ? 'Properties' : 'Substations')}
-                  </h1>
-                  <p className="text-slate-500 text-xs mt-1">Analyzing {activeCategory === 'properties' ? allFilteredProperties.length : allFilteredSubstations.length} records</p>
+                <div className="flex items-center gap-4">
+                  <button 
+                    onClick={() => setIsSpatialPanelOpen(!isSpatialPanelOpen)}
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[10px] font-black uppercase tracking-[0.2em]",
+                      isSpatialPanelOpen 
+                        ? "bg-slate-900 text-white border-slate-900 shadow-lg" 
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                    )}
+                  >
+                    {isSpatialPanelOpen ? (
+                      <>
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                        Hide Records
+                      </>
+                    ) : (
+                      <>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                        Show Records
+                      </>
+                    )}
+                  </button>
+                  <div className="h-4 w-px bg-slate-200 mx-1 hidden md:block" />
+                  <div>
+                    <h1 className="text-xl font-bold text-slate-800 tracking-tight">
+                      {view === 'map' ? 'Spatial Intelligence View' : (activeCategory === 'properties' ? 'Properties' : 'Substations')}
+                    </h1>
+                    <p className="text-slate-500 text-xs mt-1">Analyzing {activeCategory === 'properties' ? allFilteredProperties.length : allFilteredSubstations.length} records</p>
+                  </div>
                 </div>
                 
                 <div className="flex items-center bg-white p-1 rounded-xl shadow-sm border border-slate-200">
-                  {/* Internal View Toggle */}
+                  <button
+                    onClick={() => setView('map')}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] transition-all",
+                      view === 'map' ? "bg-slate-900 text-white shadow-md shadow-slate-200" : "text-slate-500 hover:bg-slate-50"
+                    )}
+                  >
+                    <Plus className={cn("w-3.5 h-3.5", view === 'map' ? "text-indigo-400" : "text-slate-400")} />
+                    Spatial Index
+                  </button>
+                  <button
+                    onClick={() => setView('list')}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] transition-all",
+                      view === 'list' ? "bg-slate-900 text-white shadow-md shadow-slate-200" : "text-slate-500 hover:bg-slate-50"
+                    )}
+                  >
+                    <Search className={cn("w-3.5 h-3.5", view === 'list' ? "text-indigo-400" : "text-slate-400")} />
+                    Catalog View
+                  </button>
                 </div>
              </div>
 
-             <div className="flex-1 relative overflow-hidden">
-                {view === 'map' ? (
-                  <div 
-                    key="map-container"
-                    className="absolute inset-0 flex"
-                  >
-                    <AnimatePresence initial={false}>
-                      {isSpatialPanelOpen && (
-                        <motion.div
-                          initial={{ width: 0, opacity: 0 }}
-                          animate={{ width: 288, opacity: 1 }}
-                          exit={{ width: 0, opacity: 0 }}
-                          transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                          className="h-full overflow-hidden shrink-0"
-                        >
-                          <SpatialCatalog 
-                            properties={filteredProperties}
-                            candidateProperties={filteredCandidateProperties}
-                            substations={filteredSubstations}
-                            candidateSubstations={filteredCandidateSubstations}
-                            selectedPropertyId={selectedProperty?.id}
-                            selectedSubstationId={selectedSubstation?.id}
-                            hiddenPropertyIds={hiddenPropertyIds}
-                            onToggleVisibility={togglePropertyVisibility}
-                            onDeleteCandidateProperty={handleDeleteCandidateProperty}
-                            onSelectProperty={handleSelectProperty}
-                            onOpenDetails={handleOpenDetails}
-                            onSelectSubstation={handleSelectSubstation}
-                            searchQuery={searchQuery}
-                            setSearchQuery={setSearchQuery}
-                          />
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    <div 
-                      className="flex-1 relative"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {/* Panel Toggle Button */}
-                      <button
-                        onClick={() => setIsSpatialPanelOpen(!isSpatialPanelOpen)}
-                        className={cn(
-                          "absolute top-4 left-4 z-[1100] w-10 h-10 bg-white rounded-xl shadow-xl flex items-center justify-center border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all active:scale-95 group",
-                          !isSpatialPanelOpen && "bg-blue-600 text-white border-blue-600 hover:bg-blue-700"
-                        )}
-                        title={isSpatialPanelOpen ? "Close Spatial Catalog" : "Open Spatial Catalog"}
-                      >
-                        {isSpatialPanelOpen ? (
-                          <ChevronLeft className="w-5 h-5" />
-                        ) : (
-                          <div className="relative">
-                            <Database className="w-4 h-4" />
-                            <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-blue-600 animate-pulse" />
-                          </div>
-                        )}
-                        
-                        {!isSpatialPanelOpen && (
-                          <span className="absolute left-14 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-lg whitespace-nowrap shadow-2xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
-                            Open Catalog
-                          </span>
-                        )}
-                      </button>
-
-                      <MapComponent 
-                         properties={filteredProperties.filter(p => !hiddenPropertyIds.includes(p.id))} 
+            <div className="flex-1 relative overflow-hidden">
+               {view === 'map' ? (
+                 <div className="absolute inset-0 flex gap-4">
+                   <div className={cn(
+                     "h-full overflow-hidden shrink-0 border border-slate-100 rounded-2xl shadow-sm transition-all duration-500 ease-in-out bg-white",
+                     isSpatialPanelOpen ? "w-[320px] opacity-100 translate-x-0" : "w-0 opacity-0 -translate-x-20 pointer-events-none"
+                   )}>
+                     <div className="w-[320px] h-full"> {/* Inner fixed width to prevent content squishing during transition */}
+                       <SpatialCatalog 
+                         properties={filteredProperties}
+                         candidateProperties={filteredCandidateProperties}
                          substations={filteredSubstations}
                          candidateSubstations={filteredCandidateSubstations}
-                         candidateProperties={filteredCandidateProperties}
-                         onSelectProperty={handleSelectProperty} 
-                         selectedProperty={selectedProperty}
-                         onSelectSubstation={handleSelectSubstation}
-                         selectedSubstation={selectedSubstation}
-                         onAddSubstation={handleAddCandidate}
-                         onDeleteCandidateSubstation={handleDeleteCandidateSubstation}
-                         onAddProperty={handleAddCandidateProperty}
+                         selectedPropertyId={selectedProperty?.id}
+                         selectedSubstationId={selectedSubstation?.id}
+                         hiddenPropertyIds={hiddenPropertyIds}
+                         onToggleVisibility={togglePropertyVisibility}
                          onDeleteCandidateProperty={handleDeleteCandidateProperty}
-                         onDiscoverNearby={handleDiscoverNearby}
-                         onDiscoverLand={handleDiscoverLand}
-                         onCancelDiscovery={handleCancelDiscovery}
-                         onClearCandidates={() => {
-                           setCandidateSubstations([]);
-                           setCandidateProperties([]);
-                         }}
-                         isDiscovering={isDiscovering}
-                         isDiscoveringLand={isDiscoveringLand}
-                         rulerActive={isRulerActive}
-                         onRulerActiveChange={setIsRulerActive}
+                         onSelectProperty={handleSelectProperty}
                          onOpenDetails={handleOpenDetails}
-                         isFullscreen={isFullscreen}
-                         onFullscreenChange={setIsFullscreen}
-                      />
-                    </div>
-                  </div>
-                ) : (
+                         onSelectSubstation={handleSelectSubstation}
+                         searchQuery={searchQuery}
+                         setSearchQuery={setSearchQuery}
+                       />
+                     </div>
+                   </div>
+                   
+                   <div className="flex-1 relative">
+                     <MapComponent 
+                        properties={filteredProperties.filter(p => !hiddenPropertyIds.includes(p.id))} 
+                        substations={filteredSubstations}
+                        candidateSubstations={filteredCandidateSubstations}
+                        candidateProperties={filteredCandidateProperties}
+                        onSelectProperty={handleSelectProperty} 
+                        selectedProperty={selectedProperty}
+                        onSelectSubstation={handleSelectSubstation}
+                        selectedSubstation={selectedSubstation}
+                        onAddSubstation={handleAddCandidate}
+                        onDeleteCandidateSubstation={handleDeleteCandidateSubstation}
+                        onAddProperty={handleAddCandidateProperty}
+                        onDeleteCandidateProperty={handleDeleteCandidateProperty}
+                        onDiscoverNearby={handleDiscoverNearby}
+                        onDiscoverLand={handleDiscoverLand}
+                        onCancelDiscovery={handleCancelDiscovery}
+                        onClearCandidates={() => {
+                          setCandidateSubstations([]);
+                          setCandidateProperties([]);
+                        }}
+                        isDiscovering={isDiscovering}
+                        isDiscoveringLand={isDiscoveringLand}
+                        rulerActive={isRulerActive}
+                        onRulerActiveChange={setIsRulerActive}
+                        onOpenDetails={handleOpenDetails}
+                        isFullscreen={isFullscreen}
+                        onFullscreenChange={setIsFullscreen}
+                     />
+                   </div>
+                 </div>
+               ) : (
                   <div
                     key="list-container"
                     className="absolute inset-0 overflow-y-auto custom-scrollbar"
@@ -891,66 +914,54 @@ export default function App() {
         <UserGuideModal onClose={() => setIsUserGuideOpen(false)} />
       )}
 
-      <AnimatePresence>
-        {discoveryProgress && (
-          <motion.div 
-            initial={{ opacity: 0, y: -20, x: '-50%' }}
-            animate={{ opacity: 1, y: 0, x: '-50%' }}
-            exit={{ opacity: 0, y: -20, x: '-50%' }}
-            className="fixed top-8 left-1/2 z-[9999] w-full max-w-md px-6"
-          >
-            <div className="bg-slate-900/95 backdrop-blur-xl rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-white/10 p-5 ring-1 ring-white/5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-blue-500/20 flex items-center justify-center">
-                    <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 block leading-none mb-1">
-                      AI Land Discovery
-                    </span>
-                    <span className="text-xs font-bold text-white">
-                      {discoveryProgress.total === 1 ? 'Mapping Region...' : 'Harvesting Coordinates...'}
-                    </span>
-                  </div>
+      {discoveryProgress && (
+        <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[9999] w-full max-w-md px-6 animate-in fade-in slide-in-from-top-5 duration-300">
+          <div className="bg-slate-900/95 backdrop-blur-xl rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-white/10 p-5 ring-1 ring-white/5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                  <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
                 </div>
-                <div className="text-right">
-                  <span className="text-xs font-black text-white tabular-nums">
-                    {discoveryProgress.total > 1 ? `${discoveryProgress.current}/${discoveryProgress.total}` : 'Scanning'}
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 block leading-none mb-1">
+                    AI Land Discovery
+                  </span>
+                  <span className="text-xs font-bold text-white">
+                    {discoveryProgress.total === 1 ? 'Mapping Region...' : 'Harvesting Coordinates...'}
                   </span>
                 </div>
               </div>
-              
-              <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden p-0.5 border border-white/5">
-                <motion.div 
-                  className="h-full bg-gradient-to-r from-blue-600 to-indigo-500 rounded-full"
-                  initial={{ width: "2%" }}
-                  animate={{ 
-                    width: discoveryProgress.total > 1 
-                      ? `${Math.max(2, (discoveryProgress.current / discoveryProgress.total) * 100)}%` 
-                      : ["2%", "40%", "2%"] 
-                  }}
-                  transition={discoveryProgress.total > 1 
-                    ? { type: "spring", bounce: 0, duration: 0.8 }
-                    : { repeat: Infinity, duration: 3, ease: "easeInOut" }
-                  }
-                />
-              </div>
-              <div className="flex items-center justify-between mt-3">
-                 <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-                   PropScope Intelligence Grid
-                 </p>
-                 <button 
-                   onClick={handleCancelDiscovery}
-                   className="text-[9px] font-black uppercase tracking-widest text-red-400 hover:text-red-300 transition-colors"
-                 >
-                   Cancel search
-                 </button>
+              <div className="text-right">
+                <span className="text-xs font-black text-white tabular-nums">
+                  {discoveryProgress.total > 1 ? `${discoveryProgress.current}/${discoveryProgress.total}` : 'Scanning'}
+                </span>
               </div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            
+            <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden p-0.5 border border-white/5">
+              <div 
+                className="h-full bg-gradient-to-r from-blue-600 to-indigo-500 rounded-full transition-all duration-1000 ease-in-out"
+                style={{ 
+                  width: discoveryProgress.total > 1 
+                    ? `${Math.max(2, (discoveryProgress.current / discoveryProgress.total) * 100)}%` 
+                    : "40%" 
+                }}
+              />
+            </div>
+            <div className="flex items-center justify-between mt-3">
+               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
+                 PropScope Intelligence Grid
+               </p>
+               <button 
+                 onClick={handleCancelDiscovery}
+                 className="text-[9px] font-black uppercase tracking-widest text-red-400 hover:text-red-300 transition-colors"
+               >
+                 Cancel search
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isImportModalOpen && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6">
@@ -1404,40 +1415,35 @@ export default function App() {
       `}</style>
       {/* Toast Notifications */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex flex-col gap-3 z-[10000] pointer-events-none">
-        <AnimatePresence>
-          {notifications.map(n => (
-            <motion.div 
-              key={n.id}
-              initial={{ opacity: 0, y: 20, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
-              className={cn(
-                "px-6 py-4 rounded-2xl shadow-2xl border flex items-center gap-4 pointer-events-auto backdrop-blur-md",
-                n.type === 'success' ? "bg-emerald-600/90 text-white border-emerald-500" :
-                n.type === 'error' ? "bg-red-600/90 text-white border-red-500" :
-                "bg-slate-900/90 text-white border-slate-800"
-              )}
+        {notifications.map(n => (
+          <div 
+            key={n.id}
+            className={cn(
+              "px-6 py-4 rounded-2xl shadow-2xl border flex items-center gap-4 pointer-events-auto backdrop-blur-md",
+              n.type === 'success' ? "bg-emerald-600/90 text-white border-emerald-500" :
+              n.type === 'error' ? "bg-red-600/90 text-white border-red-500" :
+              "bg-slate-900/90 text-white border-slate-800"
+            )}
+          >
+            <div className={cn(
+              "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-sm",
+              n.type === 'success' ? "bg-emerald-500" :
+              n.type === 'error' ? "bg-red-500" :
+              "bg-slate-800"
+            )}>
+              {n.type === 'success' && <Check className="w-4 h-4" />}
+              {n.type === 'error' && <AlertTriangle className="w-4 h-4" />}
+              {n.type === 'info' && <Search className="w-4 h-4" />}
+            </div>
+            <span className="text-[11px] font-black uppercase tracking-widest leading-none">{n.message}</span>
+            <button 
+              onClick={() => setNotifications(prev => prev.filter(item => item.id !== n.id))}
+              className="ml-4 p-1 hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"
             >
-              <div className={cn(
-                "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-sm",
-                n.type === 'success' ? "bg-emerald-500" :
-                n.type === 'error' ? "bg-red-500" :
-                "bg-slate-800"
-              )}>
-                {n.type === 'success' && <Check className="w-4 h-4" />}
-                {n.type === 'error' && <AlertTriangle className="w-4 h-4" />}
-                {n.type === 'info' && <Search className="w-4 h-4" />}
-              </div>
-              <span className="text-[11px] font-black uppercase tracking-widest leading-none">{n.message}</span>
-              <button 
-                onClick={() => setNotifications(prev => prev.filter(item => item.id !== n.id))}
-                className="ml-4 p-1 hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </motion.div>
-          ))}
-        </AnimatePresence>
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );

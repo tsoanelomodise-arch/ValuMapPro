@@ -55,10 +55,11 @@ export default function EvaluationDashboard({
   }, [property, initialEditMode]);
 
   const closestSubstation = useMemo(() => {
-    if (!substations.length) return null;
+    if (!substations.length || !property.coordinates || !Array.isArray(property.coordinates)) return null;
     let minD = Infinity;
     let closest = substations[0];
     substations.forEach(s => {
+      if (!s.coordinates || !Array.isArray(s.coordinates)) return;
       const d = calculateDistance(property.coordinates[0], property.coordinates[1], s.coordinates[0], s.coordinates[1]);
       if (d < minD) {
         minD = d;
