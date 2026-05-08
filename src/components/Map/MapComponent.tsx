@@ -1169,7 +1169,7 @@ export default function MapComponent({
         <MapEvents />
       </MapContainer>
 
-      <div className="absolute top-4 left-4 z-[1000] flex flex-col gap-2 items-start" data-html2canvas-ignore="true">
+      <div className="absolute top-16 left-4 z-[1000] flex flex-col gap-2 items-start" data-html2canvas-ignore="true">
         <button
           onClick={() => setSelectedBasemapId(selectedBasemapId === 'satellite' ? 'streets' : 'satellite')}
           className={cn(

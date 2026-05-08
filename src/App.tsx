@@ -22,7 +22,10 @@ import {
   Plus,
   Home,
   Check,
-  Zap
+  Zap,
+  ChevronLeft,
+  ChevronRight,
+  Database
 } from 'lucide-react';
 import { 
   searchSubstations, 
@@ -109,6 +112,7 @@ export default function App() {
   const [propertiesToDelete, setPropertiesToDelete] = useState<string[] | null>(null);
   const [substationsToDelete, setSubstationsToDelete] = useState<string[] | null>(null);
   const [isSubstationModalOpen, setIsSubstationModalOpen] = useState(false);
+  const [isSpatialPanelOpen, setIsSpatialPanelOpen] = useState(true);
   const [substationToEdit, setSubstationToEdit] = useState<Substation | null>(null);
   const [substationToDelete, setSubstationToDelete] = useState<null | string>(null);
   const [isDuplicateWarningOpen, setIsDuplicateWarningOpen] = useState(false);
@@ -702,27 +706,64 @@ export default function App() {
                     key="map-container"
                     className="absolute inset-0 flex"
                   >
-                     <SpatialCatalog 
-                       properties={filteredProperties}
-                       candidateProperties={filteredCandidateProperties}
-                       substations={filteredSubstations}
-                       candidateSubstations={filteredCandidateSubstations}
-                       selectedPropertyId={selectedProperty?.id}
-                       selectedSubstationId={selectedSubstation?.id}
-                       hiddenPropertyIds={hiddenPropertyIds}
-                       onToggleVisibility={togglePropertyVisibility}
-                       onDeleteCandidateProperty={handleDeleteCandidateProperty}
-                       onSelectProperty={handleSelectProperty}
-                       onOpenDetails={handleOpenDetails}
-                       onSelectSubstation={handleSelectSubstation}
-                       searchQuery={searchQuery}
-                       setSearchQuery={setSearchQuery}
-                     />
+                    <AnimatePresence initial={false}>
+                      {isSpatialPanelOpen && (
+                        <motion.div
+                          initial={{ width: 0, opacity: 0 }}
+                          animate={{ width: 288, opacity: 1 }}
+                          exit={{ width: 0, opacity: 0 }}
+                          transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                          className="h-full overflow-hidden shrink-0"
+                        >
+                          <SpatialCatalog 
+                            properties={filteredProperties}
+                            candidateProperties={filteredCandidateProperties}
+                            substations={filteredSubstations}
+                            candidateSubstations={filteredCandidateSubstations}
+                            selectedPropertyId={selectedProperty?.id}
+                            selectedSubstationId={selectedSubstation?.id}
+                            hiddenPropertyIds={hiddenPropertyIds}
+                            onToggleVisibility={togglePropertyVisibility}
+                            onDeleteCandidateProperty={handleDeleteCandidateProperty}
+                            onSelectProperty={handleSelectProperty}
+                            onOpenDetails={handleOpenDetails}
+                            onSelectSubstation={handleSelectSubstation}
+                            searchQuery={searchQuery}
+                            setSearchQuery={setSearchQuery}
+                          />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
 
                     <div 
                       className="flex-1 relative"
                       onClick={(e) => e.stopPropagation()}
                     >
+                      {/* Panel Toggle Button */}
+                      <button
+                        onClick={() => setIsSpatialPanelOpen(!isSpatialPanelOpen)}
+                        className={cn(
+                          "absolute top-4 left-4 z-[1100] w-10 h-10 bg-white rounded-xl shadow-xl flex items-center justify-center border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all active:scale-95 group",
+                          !isSpatialPanelOpen && "bg-blue-600 text-white border-blue-600 hover:bg-blue-700"
+                        )}
+                        title={isSpatialPanelOpen ? "Close Spatial Catalog" : "Open Spatial Catalog"}
+                      >
+                        {isSpatialPanelOpen ? (
+                          <ChevronLeft className="w-5 h-5" />
+                        ) : (
+                          <div className="relative">
+                            <Database className="w-4 h-4" />
+                            <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-blue-600 animate-pulse" />
+                          </div>
+                        )}
+                        
+                        {!isSpatialPanelOpen && (
+                          <span className="absolute left-14 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-lg whitespace-nowrap shadow-2xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                            Open Catalog
+                          </span>
+                        )}
+                      </button>
+
                       <MapComponent 
                          properties={filteredProperties.filter(p => !hiddenPropertyIds.includes(p.id))} 
                          substations={filteredSubstations}
