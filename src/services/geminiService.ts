@@ -2,9 +2,9 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Property, Substation } from "../types";
 
 const getAI = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || "";
   if (!apiKey) {
-    console.warn("GEMINI_API_KEY is not defined. The AI Guided Search might not work in some environments unless configured.");
+    console.error("GEMINI_API_KEY is not defined in the environment. AI features will fail. Ensure the API key is set in AI Studio Settings.");
     return null;
   }
   return new GoogleGenAI({ apiKey });
@@ -46,7 +46,7 @@ export async function searchSubstations(area: string): Promise<AISubstation[]> {
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-3-flash-preview",
       contents: `Find 3-5 actual electrical substations in or near ${area}, South Africa.
       Return JSON: name, owner, address, coordinates [lat, lng], voltageKV, mvaCapacity, description.
       Use Google Search.`,
@@ -109,7 +109,7 @@ export async function searchSubstationsByArea(north: number, south: number, east
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-3-flash-preview",
       contents: `Find 5-10 actual electrical substations in South Africa near Latitude ${north} to ${south} and Longitude ${west} to ${east}.
       Return JSON: name, owner (utility), address, coordinates [lat, lng], voltageKV, mvaCapacity.`,
       config: {
@@ -171,7 +171,7 @@ export async function searchVacantLandByArea(north: number, south: number, east:
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-3-flash-preview",
       contents: `Search for 5-10 actual VACANT LAND, PLOT, or FARM listings for sale in South Africa.
       Geographic Focus: Area around Latitude ${north} to ${south} and Longitude ${west} to ${east}.
       
@@ -259,13 +259,17 @@ export async function findLandListingLinks(north: number, south: number, east: n
   const ai = getAI();
   if (!ai) return [];
 
-  const substationContext = anchorSubstation
+  const hasValidCoords = anchorSubstation?.coordinates && 
+                        Array.isArray(anchorSubstation.coordinates) && 
+                        anchorSubstation.coordinates.length >= 2;
+
+  const substationContext = hasValidCoords
     ? `\nCRITICAL TARGET: You MUST find vacant land listings specifically within a 3km radius of the "${anchorSubstation.name}" substation located at ${anchorSubstation.coordinates[0]}, ${anchorSubstation.coordinates[1]}. This is an anchor point. Prioritize listings that mention proximity to electrical infrastructure or this specific station if possible.`
     : "";
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-3-flash-preview",
       contents: `Search for actual VACANT LAND, PLOT, or FARM listings for sale in South Africa near this area:
       Latitude ${north} to ${south}, Longitude ${west} to ${east}.${substationContext}
       
@@ -350,7 +354,7 @@ export async function importPropertyListing(input: string): Promise<Property | n
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-3-flash-preview",
       contents: `${promptPrefix}
       Extract to JSON: name, type, description, p24Url, agent(Listing Agent name), agentPhone, address(street, suburb, city, province, country), coordinates[lat, lng], specs(standSize, titleType), financials(price, marketValue).
       If it's a Property24 listing, find the specific coordinates for that address. COORDINATES ARE OPTIONAL: If the address is obfuscated or coordinates are hard to find, focus on name/price/agent and leave coordinates as null.`,
@@ -423,8 +427,9 @@ export async function searchSubstationDetails(type: string, value: string): Prom
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-3-flash-preview",
       contents: `Find technical details for South African electrical substation (${type}: ${value}). 
+      Be specific. Find its exact location (Latitude, Longitude), owner (Eskom or City Power/municipality), and technical specs (Voltage in kV, Capacity in MVA).
       Need: Name, Address, Coordinates [lat, lng], Status, Voltage (kV), Capacity (MVA).
       Use Google Search.`,
       config: {

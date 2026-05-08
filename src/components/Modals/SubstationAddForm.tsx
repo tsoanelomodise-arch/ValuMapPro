@@ -16,16 +16,22 @@ export default function SubstationAddForm({ onAdd, onShowCandidates, isSubmittin
   const [searchResults, setSearchResults] = useState<AISubstation[]>([]);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [isSearching, setIsSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleAISearch = async () => {
     if (!value) return;
     setIsSearching(true);
+    setError(null);
     setSelectedIndices(new Set());
     try {
       const results = await searchSubstations(value);
+      if (results.length === 0) {
+        setError("No substations found for this area. Try a more specific location.");
+      }
       setSearchResults(results);
     } catch (error) {
       console.error("AI Search failed:", error);
+      setError("AI search service is temporarily unavailable. Please try again later.");
     } finally {
       setIsSearching(false);
     }
@@ -124,6 +130,12 @@ export default function SubstationAddForm({ onAdd, onShowCandidates, isSubmittin
                 {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
               </button>
             </div>
+
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-100 rounded-xl">
+                <p className="text-[10px] font-bold text-red-600 uppercase tracking-widest">{error}</p>
+              </div>
+            )}
 
             {searchResults.length > 0 && (
               <div className="space-y-3">

@@ -634,6 +634,8 @@ export default function App() {
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return;
       console.error("Substation add failed:", error);
+      const errorMessage = error instanceof Error ? error.message : "AI extraction failed. Please check your search term and try again.";
+      addNotification(`Substation lookup failed: ${errorMessage}`, 'error');
     } finally {
       if (!importAbortControllerRef.current || importAbortControllerRef.current === controller) {
         setIsImporting(false);
@@ -705,7 +707,7 @@ export default function App() {
                   <button 
                     onClick={() => setIsSpatialPanelOpen(!isSpatialPanelOpen)}
                     className={cn(
-                      "flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[10px] font-black uppercase tracking-[0.2em]",
+                      "flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[10px] font-black uppercase tracking-[0.2em] z-20",
                       isSpatialPanelOpen 
                         ? "bg-slate-900 text-white border-slate-900 shadow-lg" 
                         : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
@@ -758,12 +760,12 @@ export default function App() {
 
             <div className="flex-1 relative overflow-hidden">
                {view === 'map' ? (
-                 <div className="absolute inset-0 flex gap-4">
+                 <div className="absolute inset-0 flex">
                    <div className={cn(
-                     "h-full overflow-hidden shrink-0 border border-slate-100 rounded-2xl shadow-sm transition-all duration-500 ease-in-out bg-white",
-                     isSpatialPanelOpen ? "w-80 opacity-100" : "w-0 opacity-0 pointer-events-none"
+                     "h-full overflow-hidden shrink-0 transition-all duration-500 ease-in-out relative",
+                     isSpatialPanelOpen ? "w-80 opacity-100 mr-4" : "w-0 opacity-0 pointer-events-none mr-0"
                    )}>
-                     <div className="w-80 h-full"> {/* Inner fixed width to prevent content squishing during transition */}
+                     <div className="w-80 h-full border border-slate-100 rounded-2xl shadow-sm bg-white overflow-hidden">
                        <SpatialCatalog 
                          properties={filteredProperties}
                          candidateProperties={filteredCandidateProperties}

@@ -38,7 +38,7 @@ export function SpatialCatalog({
 }: SpatialCatalogProps) {
   return (
     <div 
-      className="w-72 h-full bg-white border-r border-slate-200 z-10 flex flex-col shadow-lg"
+      className="w-full h-full bg-white border-r border-slate-200 z-10 flex flex-col shadow-lg"
     >
       <div className="p-4 border-b border-slate-100 bg-slate-50/50">
          <div className="flex items-center gap-2 mb-1">
