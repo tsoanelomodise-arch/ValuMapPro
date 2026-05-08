@@ -72,7 +72,14 @@ export default function SubstationListView({
                           <Zap className="w-4 h-4" />
                         </div>
                         <div>
-                          <p className="font-bold text-slate-900 tracking-tight">{sub.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-slate-900 tracking-tight">{sub.name}</p>
+                            {sub.id.startsWith('candidate-') && (
+                              <span className="px-1.5 py-0.5 bg-slate-50 text-slate-500 rounded text-[8px] font-black uppercase tracking-widest border border-slate-200">
+                                Discovered
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[11px] text-slate-500 font-medium">{sub.owner || 'Distribution Node'}</p>
                         </div>
                       </div>

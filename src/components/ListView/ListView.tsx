@@ -12,6 +12,7 @@ interface ListViewProps {
   onEditProperty?: (property: Property) => void;
   selectedProperty?: Property | null;
   onDeleteProperty?: (id: string) => void;
+  onDeleteCandidateProperty?: (id: string) => void;
   onDeleteMultipleProperties?: (ids: string[]) => void;
   searchQuery?: string;
   setSearchQuery?: (query: string) => void;
@@ -26,6 +27,7 @@ export default function ListView({
   onEditProperty, 
   selectedProperty, 
   onDeleteProperty,
+  onDeleteCandidateProperty,
   onDeleteMultipleProperties,
   searchQuery = '',
   setSearchQuery
@@ -165,7 +167,14 @@ export default function ListView({
                           <MapPin className="w-4 h-4 text-slate-400" />
                         </div>
                         <div>
-                          <p className="font-bold text-slate-900 tracking-tight">{property.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-slate-900 tracking-tight">{property.name}</p>
+                            {property.id.startsWith('candidate-') && (
+                              <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[8px] font-black uppercase tracking-widest border border-emerald-100">
+                                Discovered
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[11px] text-slate-500 font-medium">
                             {property.address.suburb}, {property.address.city}
                           </p>
@@ -208,7 +217,15 @@ export default function ListView({
                               <Edit3 className="w-4 h-4" />
                             </button>
                           )}
-                          {onDeleteProperty && (
+                          {property.id.startsWith('candidate-') && onDeleteCandidateProperty ? (
+                            <button 
+                              onClick={() => onDeleteCandidateProperty(property.id)}
+                              className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                              title="Discard Discovery"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          ) : onDeleteProperty && (
                             <button 
                               onClick={() => onDeleteProperty(property.id)}
                               className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"

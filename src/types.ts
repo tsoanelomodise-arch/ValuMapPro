@@ -28,6 +28,7 @@ export interface Property {
     marketValue: number;
   };
   images?: string[];
+  notes?: string;
 }
 
 export interface MarkerColor {

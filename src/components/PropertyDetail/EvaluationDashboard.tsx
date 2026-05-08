@@ -18,13 +18,15 @@ import {
   X,
   ExternalLink,
   Zap,
-  ShieldCheck
+  ShieldCheck,
+  StickyNote
 } from 'lucide-react';
 
 interface EvaluationDashboardProps {
   property: Property;
   substations?: Substation[];
   onDeleteProperty?: (id: string) => void;
+  onDeleteCandidate?: (id: string) => void;
   onUpdateProperty?: (property: Property) => void;
   onAddCandidate?: (property: Property) => void;
   initialEditMode?: boolean;
@@ -34,6 +36,7 @@ export default function EvaluationDashboard({
   property, 
   substations = [], 
   onDeleteProperty, 
+  onDeleteCandidate,
   onUpdateProperty, 
   onAddCandidate,
   initialEditMode = false 
@@ -65,7 +68,7 @@ export default function EvaluationDashboard({
     return { substation: closest, distance: minD };
   }, [property, substations]);
 
-  const { specs, financials, address } = isEditing ? editedProperty : property;
+  const { specs, financials, address, notes } = isEditing ? editedProperty : property;
 
   const extractCoordsFromUrl = (url: string): [number, number] | null => {
     const regex = /@(-?\d+\.\d+),(-?\d+\.\d+)|ll=(-?\d+\.\d+),(-?\d+\.\d+)|q=(-?\d+\.\d+),(-?\d+\.\d+)/;
@@ -88,6 +91,7 @@ export default function EvaluationDashboard({
       if (path === 'name') next = { ...next, [path]: value };
       else if (path === 'type') next = { ...next, [path]: value };
       else if (path === 'description') next = { ...next, [path]: value };
+      else if (path === 'notes') next = { ...next, [path]: value };
       else if (path === 'agent') next = { ...next, [path]: value };
       else if (path === 'listingNumber') next = { ...next, [path]: value };
       else if (path === 'googleMapsUrl') {
@@ -373,6 +377,36 @@ export default function EvaluationDashboard({
            </div>
 
            <div>
+            <div className="bg-amber-50/50 rounded-2xl p-4 border border-amber-100/50 my-6">
+               <div className="flex items-center gap-2 mb-3">
+                  <div className="p-1.5 bg-amber-100 text-amber-700 rounded-lg">
+                     <StickyNote className="w-3.5 h-3.5" />
+                  </div>
+                  <p className="text-[10px] font-bold text-amber-900 uppercase tracking-widest">Personal Notes</p>
+               </div>
+               
+               {isEditing ? (
+                  <textarea 
+                    value={notes || ''}
+                    onChange={(e) => handleFieldUpdate('notes', e.target.value)}
+                    placeholder="Add your internal evaluation notes, strategy, or concerns here..."
+                    className="w-full min-h-[100px] text-xs text-slate-700 bg-white border border-amber-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-amber-500/20 placeholder:text-slate-300 resize-none font-medium leading-relaxed shadow-inner"
+                  />
+               ) : (
+                  <div className="min-h-[40px]">
+                    {notes ? (
+                       <p className="text-xs text-slate-700 font-medium leading-relaxed italic">
+                         "{notes}"
+                       </p>
+                    ) : (
+                       <p className="text-xs text-slate-400 font-medium italic">
+                         No personal notes added yet. Click edit to add appraisal details.
+                       </p>
+                    )}
+                  </div>
+               )}
+            </div>
+
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Location Context</p>
               <div className="space-y-4">
                  <div className="flex justify-between text-xs items-center">
@@ -474,14 +508,23 @@ export default function EvaluationDashboard({
            </div>
         </div>
 
-        {onDeleteProperty && (
+        {(onDeleteProperty || onDeleteCandidate) && (
           <div className="p-8 border-t border-slate-50 text-center">
-             <button 
-               onClick={() => onDeleteProperty(property.id)}
-               className="text-[10px] font-bold text-slate-300 hover:text-red-500 transition-all uppercase tracking-widest flex items-center gap-2 mx-auto"
-             >
-               <Trash2 className="w-3.5 h-3.5" /> Delete Record
-             </button>
+             {property.id.startsWith('candidate-') && onDeleteCandidate ? (
+                <button 
+                  onClick={() => onDeleteCandidate(property.id)}
+                  className="text-[10px] font-bold text-slate-300 hover:text-red-500 transition-all uppercase tracking-widest flex items-center gap-2 mx-auto"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Discard Discovery
+                </button>
+             ) : onDeleteProperty && (
+                <button 
+                  onClick={() => onDeleteProperty(property.id)}
+                  className="text-[10px] font-bold text-slate-300 hover:text-red-500 transition-all uppercase tracking-widest flex items-center gap-2 mx-auto"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Delete Record
+                </button>
+             )}
           </div>
         )}
       </div>

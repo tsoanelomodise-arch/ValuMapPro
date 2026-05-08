@@ -1,6 +1,6 @@
 import React from 'react';
 import { Property, Substation, PROPERTY_TYPE_COLORS } from '../../types';
-import { MapPin, Zap, ArrowUpRight, Search } from 'lucide-react';
+import { MapPin, Zap, ArrowUpRight, Search, Trash2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface SpatialCatalogProps {
@@ -12,6 +12,7 @@ interface SpatialCatalogProps {
   selectedSubstationId?: string | null;
   hiddenPropertyIds: string[];
   onToggleVisibility: (id: string) => void;
+  onDeleteCandidateProperty?: (id: string) => void;
   onSelectProperty: (property: Property) => void;
   onOpenDetails: (property: Property) => void;
   onSelectSubstation: (substation: Substation) => void;
@@ -28,6 +29,7 @@ export function SpatialCatalog({
   selectedSubstationId,
   hiddenPropertyIds,
   onToggleVisibility,
+  onDeleteCandidateProperty,
   onSelectProperty,
   onOpenDetails,
   onSelectSubstation,
@@ -88,9 +90,21 @@ export function SpatialCatalog({
                      <p className="text-[11px] font-black text-slate-800 uppercase tracking-tight truncate leading-none mb-1">{p.name}</p>
                      <p className="text-[10px] text-emerald-600 font-bold truncate tracking-tight uppercase">Discovered Land</p>
                   </div>
-                  <div className="w-3.5 h-3.5 flex items-center justify-center">
-                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                  </div>
+                  {onDeleteCandidateProperty ? (
+                    <div 
+                      className="w-5 h-5 flex items-center justify-center text-emerald-300 hover:text-red-500 transition-colors cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteCandidateProperty(p.id);
+                      }}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </div>
+                  ) : (
+                    <div className="w-3.5 h-3.5 flex items-center justify-center">
+                      <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                    </div>
+                  )}
                 </button>
               </div>
             ))}

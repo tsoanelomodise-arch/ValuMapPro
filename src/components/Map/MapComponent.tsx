@@ -154,7 +154,9 @@ interface MapComponentProps {
   onSelectSubstation?: (substation: Substation) => void;
   selectedSubstation?: Substation | null;
   onAddSubstation?: (substation: Substation) => void;
+  onDeleteCandidateSubstation?: (id: string) => void;
   onAddProperty?: (property: Property) => void;
+  onDeleteCandidateProperty?: (id: string) => void;
   onDiscoverNearby?: (bounds: { north: number, south: number, east: number, west: number }) => void;
   onDiscoverLand?: (bounds: { north: number, south: number, east: number, west: number }) => void;
   onCancelDiscovery?: () => void;
@@ -244,13 +246,13 @@ const createColoredIcon = (color: string, isSelected: boolean = false, label?: s
 const createCandidateIcon = (isSelected: boolean = false, label?: string, isProperty: boolean = false) => {
   const width = isSelected ? 32 : 24;
   const height = Math.round(width * (34 / 24));
-  const color = isProperty ? '#059669' : '#4f46e5'; // Emerald 600 for land, Indigo 600 for stations
+  const color = isProperty ? '#059669' : '#475569'; // Emerald 600 for land, Slate 600 for stations
   
   return L.divIcon({
     className: `custom-div-icon candidate-icon ${isProperty ? 'property-candidate' : 'station-candidate'}`,
     html: `
       <div class="relative flex flex-col items-center">
-        <div class="absolute -inset-2 bg-${isProperty ? 'emerald' : 'indigo'}-500/20 rounded-full blur-md animate-pulse"></div>
+        <div class="absolute -inset-2 bg-${isProperty ? 'emerald' : 'slate'}-500/20 rounded-full blur-md animate-pulse"></div>
         <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-2xl relative z-10" preserveAspectRatio="xMidYMid meet">
           <path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 34 12 34C12 34 24 21 24 12C24 5.37 18.63 0 12 0Z" fill="${color}" stroke="white" stroke-width="2"/>
           <path d="M12 8V16M8 12H16" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
@@ -299,7 +301,7 @@ const SubstationLayerGroup = React.memo(({ substations, onSelect, selectedId, op
 });
 
 // Candidate Property Markers
-const CandidatePropertyLayerGroup = ({ properties, onAdd, selectedId }: { properties: Property[], onAdd?: (p: Property) => void, selectedId?: string }) => {
+const CandidatePropertyLayerGroup = ({ properties, onAdd, onDelete, selectedId }: { properties: Property[], onAdd?: (p: Property) => void, onDelete?: (id: string) => void, selectedId?: string }) => {
   console.log("Rendering Candidate Properties:", properties.length);
   return (
     <LayerGroup>
@@ -331,16 +333,31 @@ const CandidatePropertyLayerGroup = ({ properties, onAdd, selectedId }: { proper
                 )}
               </div>
 
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAdd?.(property);
-                }}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 group"
-              >
-                <Check className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                Confirm & Import
-              </button>
+              <div className="flex flex-col gap-2">
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAdd?.(property);
+                  }}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 group"
+                >
+                  <Check className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                  Confirm & Import
+                </button>
+                
+                {onDelete && (
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(property.id);
+                    }}
+                    className="w-full bg-white border border-slate-200 text-slate-400 hover:text-red-500 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                  >
+                    <X className="w-3 h-3" />
+                    Discard Discovery
+                  </button>
+                )}
+              </div>
             </div>
           </Popup>
         </Marker>
@@ -358,10 +375,10 @@ function MapController({ center, rulerActive }: { center: [number, number] | nul
     if (center && !rulerActive && !isNaN(center[0]) && !isNaN(center[1])) {
       // Only fly if the center actually changed significantly
       if (!lastCenterRef.current || 
-          lastCenterRef.current[0] !== center[0] || 
-          lastCenterRef.current[1] !== center[1]) {
+          Math.abs(lastCenterRef.current[0] - center[0]) > 0.00001 || 
+          Math.abs(lastCenterRef.current[1] - center[1]) > 0.00001) {
         
-        map.flyTo(center, 17, {
+        map.flyTo(center, map.getZoom(), {
           duration: 1.2,
           easeLinearity: 0.25
         });
@@ -377,10 +394,12 @@ function MapController({ center, rulerActive }: { center: [number, number] | nul
 const CandidateSubstationLayerGroup = ({ 
   substations, 
   onAdd, 
+  onDelete,
   selectedId 
 }: { 
   substations: Substation[], 
   onAdd?: (s: Substation) => void, 
+  onDelete?: (id: string) => void,
   selectedId?: string 
 }) => {
   return (
@@ -415,16 +434,31 @@ const CandidateSubstationLayerGroup = ({
                 )}
               </div>
 
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAdd?.(substation);
-                }}
-                className="w-full bg-slate-900 hover:bg-black text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 group"
-              >
-                <Check className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                Confirm & Import
-              </button>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAdd?.(substation);
+                  }}
+                  className="w-full bg-slate-900 hover:bg-black text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 group"
+                >
+                  <Check className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                  Confirm & Import
+                </button>
+                
+                {onDelete && (
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(substation.id);
+                    }}
+                    className="w-full bg-white border border-slate-200 text-slate-400 hover:text-red-500 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                  >
+                    <X className="w-3 h-3" />
+                    Discard Discovery
+                  </button>
+                )}
+              </div>
             </div>
           </Popup>
         </Marker>
@@ -443,7 +477,9 @@ export default function MapComponent({
   onSelectSubstation,
   selectedSubstation,
   onAddSubstation,
+  onDeleteCandidateSubstation,
   onAddProperty,
+  onDeleteCandidateProperty,
   rulerActive,
   onRulerActiveChange,
   onOpenDetails,
@@ -1035,12 +1071,14 @@ export default function MapComponent({
         <CandidateSubstationLayerGroup 
           substations={candidateSubstations} 
           onAdd={onAddSubstation} 
+          onDelete={onDeleteCandidateSubstation}
           selectedId={selectedSubstation?.id} 
         />
 
         <CandidatePropertyLayerGroup 
           properties={candidateProperties}
           onAdd={onAddProperty}
+          onDelete={onDeleteCandidateProperty}
           selectedId={selectedProperty?.id}
         />
 
@@ -1278,11 +1316,28 @@ export default function MapComponent({
 
         <button
           onClick={() => onFullscreenChange(!isFullscreen)}
-          className="p-3 bg-white rounded-xl shadow-xl border border-slate-200 text-slate-600"
+          className="p-3 bg-white rounded-xl shadow-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
           title="Toggle Fullscreen"
         >
           {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
         </button>
+
+        <div className="flex flex-col bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden" data-html2canvas-ignore="true">
+          <button
+            onClick={() => mapInstanceRef.current?.zoomIn()}
+            className="p-3 text-slate-600 hover:bg-slate-50 transition-colors border-b border-slate-100"
+            title="Zoom In"
+          >
+            <Maximize2 className="w-4 h-4 rotate-45 scale-75" />
+          </button>
+          <button
+            onClick={() => mapInstanceRef.current?.zoomOut()}
+            className="p-3 text-slate-600 hover:bg-slate-50 transition-colors"
+            title="Zoom Out"
+          >
+            <Minimize2 className="w-4 h-4 rotate-45 scale-75" />
+          </button>
+        </div>
 
         <button
           onClick={() => setIsSelectingForExport(!isSelectingForExport)}

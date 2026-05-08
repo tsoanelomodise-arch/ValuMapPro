@@ -116,8 +116,8 @@ export default function App() {
   const [isRulerActive, setIsRulerActive] = useState(false);
   const [isEditingRequested, setIsEditingRequested] = useState(false);
   const [hiddenPropertyIds, setHiddenPropertyIds] = usePersistedState<string[]>('propscope_hidden_properties', []);
-  const [candidateSubstations, setCandidateSubstations] = useState<Substation[]>([]);
-  const [candidateProperties, setCandidateProperties] = useState<Property[]>([]);
+  const [candidateSubstations, setCandidateSubstations] = usePersistedState<Substation[]>('propscope_candidate_substations', []);
+  const [candidateProperties, setCandidateProperties] = usePersistedState<Property[]>('propscope_candidate_properties', []);
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [isDiscoveringLand, setIsDiscoveringLand] = useState(false);
   const [discoveryProgress, setDiscoveryProgress] = useState<{ current: number, total: number } | null>(null);
@@ -200,12 +200,36 @@ export default function App() {
       p.type.toLowerCase().includes(searchQuery.toLowerCase())
     ), [properties, searchQuery]);
 
+  const filteredCandidateProperties = useMemo(() => 
+    candidateProperties.filter(p => 
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.address.suburb.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.address.street.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.address.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.type.toLowerCase().includes(searchQuery.toLowerCase())
+    ), [candidateProperties, searchQuery]);
+
   const filteredSubstations = useMemo(() =>
     substations.filter(s =>
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.status.toLowerCase().includes(searchQuery.toLowerCase())
     ), [substations, searchQuery]);
+
+  const filteredCandidateSubstations = useMemo(() =>
+    candidateSubstations.filter(s =>
+      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.status.toLowerCase().includes(searchQuery.toLowerCase())
+    ), [candidateSubstations, searchQuery]);
+
+  const allFilteredProperties = useMemo(() => 
+    [...filteredProperties, ...filteredCandidateProperties], 
+    [filteredProperties, filteredCandidateProperties]);
+
+  const allFilteredSubstations = useMemo(() => 
+    [...filteredSubstations, ...filteredCandidateSubstations], 
+    [filteredSubstations, filteredCandidateSubstations]);
 
   const handleDiscoverLand = useCallback(async (bounds: { north: number, south: number, east: number, west: number }) => {
     if (!selectedSubstation) {
@@ -220,7 +244,7 @@ export default function App() {
     discoveryAbortControllerRef.current = controller;
 
     setIsDiscoveringLand(true);
-    setCandidateProperties([]);
+    // Don't clear properties anymore, let them accumulate
     setDiscoveryProgress({ current: 0, total: 1 }); // Start with indeterminate phase
     
     console.log("Starting Land Discovery anchored by:", selectedSubstation.name);
@@ -297,7 +321,16 @@ export default function App() {
             };
             
             console.log("Adding candidate property:", newCandidate.name, finalCoords);
-            setCandidateProperties(prev => [...prev, newCandidate]);
+            setCandidateProperties(prev => {
+              // Avoid duplicates by name and approx coordinates
+              const isDuplicate = prev.some(existing => 
+                existing.name.toLowerCase() === newCandidate.name.toLowerCase() ||
+                (Math.abs(existing.coordinates[0] - newCandidate.coordinates[0]) < 0.0001 && 
+                 Math.abs(existing.coordinates[1] - newCandidate.coordinates[1]) < 0.0001)
+              );
+              if (isDuplicate) return prev;
+              return [...prev, newCandidate];
+            });
             count++;
           }
         } catch (e) {
@@ -361,16 +394,22 @@ export default function App() {
         };
       });
 
-      // Filter out candidates that are already in our substations list (by name/approx coordinates)
+      // Filter out candidates that are already in our substations list or already in candidates
       const filteredCandidates = newCandidates.filter(candidate => {
-        return !substations.some(s => 
+        const inMain = substations.some(s => 
           s.name.toLowerCase() === candidate.name.toLowerCase() ||
           (Math.abs(s.coordinates[0] - candidate.coordinates[0]) < 0.0001 && 
            Math.abs(s.coordinates[1] - candidate.coordinates[1]) < 0.0001)
         );
+        const inCandidates = candidateSubstations.some(s => 
+          s.name.toLowerCase() === candidate.name.toLowerCase() ||
+          (Math.abs(s.coordinates[0] - candidate.coordinates[0]) < 0.0001 && 
+           Math.abs(s.coordinates[1] - candidate.coordinates[1]) < 0.0001)
+        );
+        return !inMain && !inCandidates;
       });
 
-      setCandidateSubstations(filteredCandidates);
+      setCandidateSubstations(prev => [...prev, ...filteredCandidates]);
       
       if (filteredCandidates.length === 0) {
         addNotification("No new substations discovered in this immediate area.", 'info');
@@ -410,6 +449,23 @@ export default function App() {
     setSelectedProperty(newProp);
     addNotification(`Added ${newProp.name} to property portfolio.`, 'success');
   }, [setProperties, addNotification]);
+
+  const handleDeleteCandidateProperty = useCallback((id: string) => {
+    setCandidateProperties(prev => prev.filter(p => p.id !== id));
+    if (selectedProperty?.id === id) {
+      setSelectedProperty(null);
+      setIsDetailOpen(false);
+    }
+    addNotification("Candidate property removed.", 'info');
+  }, [setCandidateProperties, selectedProperty, addNotification]);
+
+  const handleDeleteCandidateSubstation = useCallback((id: string) => {
+    setCandidateSubstations(prev => prev.filter(s => s.id !== id));
+    if (selectedSubstation?.id === id) {
+      setSelectedSubstation(null);
+    }
+    addNotification("Infrastructure discovery discarded.", 'info');
+  }, [setCandidateSubstations, selectedSubstation, addNotification]);
 
   const handleImport = useCallback(async () => {
     if (!importValue) return;
@@ -627,7 +683,7 @@ export default function App() {
                   <h1 className="text-xl font-bold text-slate-800 tracking-tight">
                     {view === 'map' ? 'Spatial Intelligence View' : (activeCategory === 'properties' ? 'Properties' : 'Substations')}
                   </h1>
-                  <p className="text-slate-500 text-xs mt-1">Analyzing {activeCategory === 'properties' ? filteredProperties.length : filteredSubstations.length} records</p>
+                  <p className="text-slate-500 text-xs mt-1">Analyzing {activeCategory === 'properties' ? allFilteredProperties.length : allFilteredSubstations.length} records</p>
                 </div>
                 
                 <div className="flex items-center bg-white p-1 rounded-xl shadow-sm border border-slate-200">
@@ -643,13 +699,14 @@ export default function App() {
                   >
                      <SpatialCatalog 
                        properties={filteredProperties}
-                       candidateProperties={candidateProperties}
+                       candidateProperties={filteredCandidateProperties}
                        substations={filteredSubstations}
-                       candidateSubstations={candidateSubstations}
+                       candidateSubstations={filteredCandidateSubstations}
                        selectedPropertyId={selectedProperty?.id}
                        selectedSubstationId={selectedSubstation?.id}
                        hiddenPropertyIds={hiddenPropertyIds}
                        onToggleVisibility={togglePropertyVisibility}
+                       onDeleteCandidateProperty={handleDeleteCandidateProperty}
                        onSelectProperty={handleSelectProperty}
                        onOpenDetails={handleOpenDetails}
                        onSelectSubstation={handleSelectSubstation}
@@ -664,14 +721,16 @@ export default function App() {
                       <MapComponent 
                          properties={filteredProperties.filter(p => !hiddenPropertyIds.includes(p.id))} 
                          substations={filteredSubstations}
-                         candidateSubstations={candidateSubstations}
-                         candidateProperties={candidateProperties}
+                         candidateSubstations={filteredCandidateSubstations}
+                         candidateProperties={filteredCandidateProperties}
                          onSelectProperty={handleSelectProperty} 
                          selectedProperty={selectedProperty}
                          onSelectSubstation={handleSelectSubstation}
                          selectedSubstation={selectedSubstation}
                          onAddSubstation={handleAddCandidate}
+                         onDeleteCandidateSubstation={handleDeleteCandidateSubstation}
                          onAddProperty={handleAddCandidateProperty}
+                         onDeleteCandidateProperty={handleDeleteCandidateProperty}
                          onDiscoverNearby={handleDiscoverNearby}
                          onDiscoverLand={handleDiscoverLand}
                          onCancelDiscovery={handleCancelDiscovery}
@@ -696,7 +755,7 @@ export default function App() {
                   >
                     {activeCategory === 'properties' ? (
                       <ListView 
-                         properties={filteredProperties} 
+                         properties={allFilteredProperties} 
                          hiddenPropertyIds={hiddenPropertyIds}
                          onToggleVisibility={togglePropertyVisibility}
                          onSelectProperty={handleSelectProperty}
@@ -714,7 +773,7 @@ export default function App() {
                       />
                     ) : (
                       <SubstationListView 
-                        substations={filteredSubstations}
+                        substations={allFilteredSubstations}
                         onSelectSubstation={handleSelectSubstation}
                         selectedSubstation={selectedSubstation}
                         onDeleteSubstation={setSubstationToDelete}
@@ -770,6 +829,7 @@ export default function App() {
                       property={selectedProperty} 
                       substations={substations}
                       onDeleteProperty={setPropertyToDelete}
+                      onDeleteCandidate={handleDeleteCandidateProperty}
                       onUpdateProperty={handleUpdateProperty}
                       onAddCandidate={handleAddLandToPortfolio}
                       initialEditMode={isEditingRequested}
@@ -1228,9 +1288,11 @@ export default function App() {
                     }
                     if (propertiesToDelete) {
                       setProperties(prev => prev.filter(p => !propertiesToDelete.includes(p.id)));
+                      setCandidateProperties(prev => prev.filter(p => !propertiesToDelete.includes(p.id)));
                       setPropertiesToDelete(null);
                       if (selectedProperty && propertiesToDelete.includes(selectedProperty.id)) {
                         setSelectedProperty(null);
+                        setIsDetailOpen(false);
                       }
                     }
                     if (substationToDelete) {

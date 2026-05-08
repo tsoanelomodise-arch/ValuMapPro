@@ -172,7 +172,7 @@ export async function searchVacantLandByArea(north: number, south: number, east:
   try {
     const response = await ai.models.generateContent({
       model: "gemini-flash-latest",
-      contents: `Search for 5-10 actual VACANT LAND, RESIDENTIAL STANDS, or AGRICULTURAL LAND listings for sale in South Africa.
+      contents: `Search for 5-10 actual VACANT LAND, PLOT, or FARM listings for sale in South Africa.
       Geographic Focus: Area around Latitude ${north} to ${south} and Longitude ${west} to ${east}.
       
       Look for listings on Property24 (property24.com) and Private Property (privateproperty.co.za).
@@ -266,7 +266,7 @@ export async function findLandListingLinks(north: number, south: number, east: n
   try {
     const response = await ai.models.generateContent({
       model: "gemini-flash-latest",
-      contents: `Search for actual VACANT LAND, RESIDENTIAL STANDS, or AGRICULTURAL LAND listings for sale in South Africa near this area:
+      contents: `Search for actual VACANT LAND, PLOT, or FARM listings for sale in South Africa near this area:
       Latitude ${north} to ${south}, Longitude ${west} to ${east}.${substationContext}
       
       Focus on Property24 (property24.com) and Private Property.
