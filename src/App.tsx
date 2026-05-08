@@ -107,6 +107,7 @@ export default function App() {
   const [isImporting, setIsImporting] = useState(false);
   const [propertyToDelete, setPropertyToDelete] = useState<string | null>(null);
   const [propertiesToDelete, setPropertiesToDelete] = useState<string[] | null>(null);
+  const [substationsToDelete, setSubstationsToDelete] = useState<string[] | null>(null);
   const [isSubstationModalOpen, setIsSubstationModalOpen] = useState(false);
   const [substationToEdit, setSubstationToEdit] = useState<Substation | null>(null);
   const [substationToDelete, setSubstationToDelete] = useState<null | string>(null);
@@ -471,10 +472,13 @@ export default function App() {
     if (!importValue) return;
     
     // Extract listing number from URL or validate as numeric
-    let finalListingNumber = importValue;
-    if (importValue.includes('property24.com')) {
-      const parts = importValue.split('/');
-      finalListingNumber = parts[parts.length - 1] || parts[parts.length - 2];
+    let finalListingNumber = importValue.trim();
+    if (finalListingNumber.includes('property24.com')) {
+      // Remove query parameters
+      const urlWithoutQuery = finalListingNumber.split('?')[0];
+      // Split by / and filter out empty strings (trailing slashes)
+      const parts = urlWithoutQuery.split('/').filter(p => p.length > 0);
+      finalListingNumber = parts[parts.length - 1];
     }
 
     if (!/^\d{5,15}$/.test(finalListingNumber)) {
@@ -529,6 +533,7 @@ export default function App() {
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return;
       console.error("Import failed:", error);
+      addNotification("AI import failed. Please check the listing details or try again later.", 'error');
     } finally {
       if (!importAbortControllerRef.current || importAbortControllerRef.current === controller) {
         setIsImporting(false);
@@ -777,6 +782,7 @@ export default function App() {
                         onSelectSubstation={handleSelectSubstation}
                         selectedSubstation={selectedSubstation}
                         onDeleteSubstation={setSubstationToDelete}
+                        onDeleteMultipleSubstations={setSubstationsToDelete}
                         onEditSubstation={setSubstationToEdit}
                         searchQuery={searchQuery}
                         setSearchQuery={setSearchQuery}
@@ -1249,13 +1255,14 @@ export default function App() {
         </div>
       )}
 
-      {(propertyToDelete || propertiesToDelete || substationToDelete) && (
+      {(propertyToDelete || propertiesToDelete || substationToDelete || substationsToDelete) && (
         <div className="fixed inset-0 z-[3000] flex items-center justify-center p-6">
           <div 
             onClick={() => {
               setPropertyToDelete(null);
               setPropertiesToDelete(null);
               setSubstationToDelete(null);
+              setSubstationsToDelete(null);
             }}
             className="absolute inset-0 bg-slate-900/60"
           />
@@ -1267,11 +1274,13 @@ export default function App() {
                 <AlertTriangle className="w-8 h-8 text-red-600" />
               </div>
               <h3 className="text-lg font-semibold text-slate-900 mb-1 tracking-tight">
-                {propertiesToDelete ? `Remove ${propertiesToDelete.length} Properties?` : 'Remove Resource?'}
+                {propertiesToDelete ? `Remove ${propertiesToDelete.length} Properties?` : 
+                 substationsToDelete ? `Remove ${substationsToDelete.length} Stations?` : 
+                 'Remove Resource?'}
               </h3>
               <p className="text-xs text-slate-500 font-medium leading-relaxed mb-8 px-4">
-                {substationToDelete 
-                  ? "This record will be permanently purged from the spatial database."
+                {substationToDelete || substationsToDelete
+                  ? "Selected records will be permanently purged from the spatial database."
                   : propertiesToDelete 
                     ? "All selected property analyses and associated data will be removed."
                     : "This property analysis and all associated data will be removed."}
@@ -1300,6 +1309,13 @@ export default function App() {
                       setSubstationToDelete(null);
                       setSelectedSubstation(null);
                     }
+                    if (substationsToDelete) {
+                      setSubstations(prev => prev.filter(s => !substationsToDelete.includes(s.id)));
+                      setSubstationsToDelete(null);
+                      if (selectedSubstation && substationsToDelete.includes(selectedSubstation.id)) {
+                        setSelectedSubstation(null);
+                      }
+                    }
                   }}
                   className="w-full bg-red-600 text-white font-semibold py-3.5 rounded-xl shadow-lg hover:bg-red-700 transition-all text-[11px] tracking-widest uppercase"
                 >
@@ -1311,6 +1327,7 @@ export default function App() {
                     setPropertyToDelete(null);
                     setPropertiesToDelete(null);
                     setSubstationToDelete(null);
+                    setSubstationsToDelete(null);
                   }}
                   className="w-full bg-slate-50 text-slate-500 font-semibold py-3.5 rounded-xl hover:bg-slate-100 transition-all text-[11px] tracking-widest uppercase"
                 >

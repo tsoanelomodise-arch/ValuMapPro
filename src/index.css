@@ -52,6 +52,12 @@
 }
 
 /* Leaflet Tooltip Overrides */
+.custom-div-icon {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
 .leaflet-tooltip {
   background: transparent !important;
   border: none !important;

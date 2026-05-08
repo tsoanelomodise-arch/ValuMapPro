@@ -7,6 +7,7 @@ interface SubstationListViewProps {
   onSelectSubstation: (substation: Substation) => void;
   selectedSubstation?: Substation | null;
   onDeleteSubstation?: (id: string) => void;
+  onDeleteMultipleSubstations?: (ids: string[]) => void;
   onEditSubstation?: (substation: Substation) => void;
   searchQuery?: string;
   setSearchQuery?: (query: string) => void;
@@ -17,10 +18,35 @@ export default function SubstationListView({
   onSelectSubstation, 
   selectedSubstation, 
   onDeleteSubstation,
+  onDeleteMultipleSubstations,
   onEditSubstation,
   searchQuery = '',
   setSearchQuery
 }: SubstationListViewProps) {
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === substations.length && substations.length > 0) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(substations.map(s => s.id));
+    }
+  };
+
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleDeleteSelected = () => {
+    if (onDeleteMultipleSubstations && selectedIds.length > 0) {
+      onDeleteMultipleSubstations(selectedIds);
+      setSelectedIds([]);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full gap-4">
       <div className="flex items-center justify-between gap-4">
@@ -39,12 +65,48 @@ export default function SubstationListView({
           {substations.length} Infrastructure Nodes
         </div>
       </div>
+
+      {selectedIds.length > 0 && (
+        <div className="flex items-center justify-between bg-slate-900 px-6 py-3 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300 shadow-xl">
+          <div className="flex items-center gap-3">
+            <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+            <p className="text-white text-xs font-bold uppercase tracking-widest leading-none">
+              {selectedIds.length} {selectedIds.length === 1 ? 'Station' : 'Stations'} Selected
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setSelectedIds([])}
+              className="px-4 py-2 text-slate-400 hover:text-white text-[10px] font-bold uppercase tracking-widest transition-colors leading-none"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={handleDeleteSelected}
+              className="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg hover:shadow-red-500/20"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Remove Selected
+            </button>
+          </div>
+        </div>
+      )}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex-1">
         <div className="overflow-x-auto h-full custom-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
-                <th className="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Substation</th>
+                <th className="px-6 py-4 w-10">
+                  <div className="flex items-center justify-center">
+                    <input 
+                      type="checkbox" 
+                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/20 cursor-pointer"
+                      checked={substations.length > 0 && selectedIds.length === substations.length}
+                      onChange={toggleSelectAll}
+                    />
+                  </div>
+                </th>
+                <th className="px-4 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Substation</th>
                 <th className="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-center">Status</th>
                 <th className="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-center">Capacity</th>
                 <th className="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-center">Voltage</th>
@@ -63,10 +125,20 @@ export default function SubstationListView({
                 substations.map((sub) => (
                   <tr 
                     key={sub.id} 
-                    className={`hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50 ${selectedSubstation?.id === sub.id ? 'bg-blue-50/50' : ''}`}
+                    className={`hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50 ${selectedSubstation?.id === sub.id ? 'bg-blue-50/50' : ''} ${selectedIds.includes(sub.id) ? 'bg-slate-50/80 shadow-[inset_4px_0_0_0_#0f172a]' : ''}`}
                     onClick={() => onSelectSubstation(sub)}
                   >
-                    <td className="px-6 py-5">
+                    <td className="px-6 py-5 w-10" onClick={(e) => toggleSelect(sub.id, e)}>
+                      <div className="flex items-center justify-center">
+                        <input 
+                          type="checkbox" 
+                          className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
+                          checked={selectedIds.includes(sub.id)}
+                          readOnly
+                        />
+                      </div>
+                    </td>
+                    <td className="px-4 py-5">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400">
                           <Zap className="w-4 h-4" />

@@ -203,27 +203,28 @@ const DistanceLines = React.memo(({ propertyDistances, rulerActive }: { property
 });
 
 const createColoredIcon = (color: string, isSelected: boolean = false, label?: string, distanceLabel?: string, priceLabel?: string, propertyId?: string, substationId?: string) => {
-  const width = isSelected ? 28 : 20;
+  const width = isSelected ? 24 : 18;
   const height = Math.round(width * (34 / 24));
   
   return L.divIcon({
     className: 'custom-div-icon',
     html: `
       <div class="relative flex flex-col items-center" 
+        style="width: ${width}px; height: ${height}px;"
         ${propertyId ? `data-property-id="${propertyId}"` : ''} 
         ${substationId ? `data-substation-id="${substationId}"` : ''}
       >
-        <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-lg" preserveAspectRatio="xMidYMid meet">
-          <path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 34 12 34C12 34 24 21 24 12C24 5.37 18.63 0 12 0Z" fill="${color}" stroke="white" stroke-width="1.5"/>
+        <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-lg flex-shrink-0" style="display: block; width: ${width}px; height: ${height}px;">
+          <path d="M12 0C5.37 0 0 5.37 0 12C0 12 0 12.2 0 12C0 21 12 34 12 34C12 34 24 21 24 12C24 5.37 18.63 0 12 0Z" fill="${color}" stroke="white" stroke-width="1.5"/>
           <circle cx="12" cy="12" r="3.5" fill="white" opacity="0.9"/>
         </svg>
-        <div class="mt-0.5 flex flex-col items-center gap-0.5 pointer-events-none">
+        <div class="absolute top-full left-1/2 -translate-x-1/2 mt-0.5 flex flex-col items-center gap-0.5 pointer-events-none w-[120px]">
           ${label ? `
-            <div class="px-1 py-0 select-none">
+            <div class="px-1 py-0 select-none text-center">
                 <span class="text-[7px] font-bold uppercase whitespace-nowrap leading-none drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]" style="color: ${color}">${label}</span>
             </div>
           ` : ''}
-          <div class="flex flex-row gap-0.5">
+          <div class="flex flex-row gap-0.5 justify-center">
             ${distanceLabel ? `
               <div class="px-1 py-0 select-none">
                   <span class="text-[7px] font-black italic text-red-600 whitespace-nowrap leading-none drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]">${distanceLabel}</span>
@@ -238,34 +239,34 @@ const createColoredIcon = (color: string, isSelected: boolean = false, label?: s
         </div>
       </div>
     `,
-    iconSize: [160, height + 60],
-    iconAnchor: [80, height],
+    iconSize: [width, height],
+    iconAnchor: [width / 2, height],
   });
 };
 
 const createCandidateIcon = (isSelected: boolean = false, label?: string, isProperty: boolean = false) => {
-  const width = isSelected ? 32 : 24;
+  const width = isSelected ? 28 : 20;
   const height = Math.round(width * (34 / 24));
   const color = isProperty ? '#059669' : '#475569'; // Emerald 600 for land, Slate 600 for stations
   
   return L.divIcon({
     className: `custom-div-icon candidate-icon ${isProperty ? 'property-candidate' : 'station-candidate'}`,
     html: `
-      <div class="relative flex flex-col items-center">
-        <div class="absolute -inset-2 bg-${isProperty ? 'emerald' : 'slate'}-500/20 rounded-full blur-md animate-pulse"></div>
-        <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-2xl relative z-10" preserveAspectRatio="xMidYMid meet">
+      <div class="relative flex flex-col items-center" style="width: ${width}px; height: ${height}px;">
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-${isProperty ? 'emerald' : 'slate'}-500/20 rounded-full blur-md animate-pulse"></div>
+        <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-2xl relative z-10 flex-shrink-0" style="display: block; width: ${width}px; height: ${height}px;">
           <path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 34 12 34C12 34 24 21 24 12C24 5.37 18.63 0 12 0Z" fill="${color}" stroke="white" stroke-width="2"/>
           <path d="M12 8V16M8 12H16" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
         </svg>
         ${label ? `
-          <div class="mt-1 px-2 py-0.5 bg-white/90 backdrop-blur-sm rounded-md shadow-sm border border-slate-200 select-none relative z-10">
-              <span class="text-[8px] font-black ${isProperty ? 'text-emerald-700' : 'text-indigo-700'} uppercase whitespace-nowrap leading-none tracking-wider">${label}</span>
+          <div class="absolute top-full left-1/2 -translate-x-1/2 mt-1 px-2 py-0.5 bg-white/90 backdrop-blur-sm rounded-md shadow-sm border border-slate-200 select-none relative z-10 max-w-[120px] text-center">
+              <span class="text-[8px] font-black ${isProperty ? 'text-emerald-700' : 'text-slate-700'} uppercase whitespace-nowrap leading-none tracking-wider block truncate">${label}</span>
           </div>
         ` : ''}
       </div>
     `,
-    iconSize: [160, height + 40],
-    iconAnchor: [80, height],
+    iconSize: [width, height],
+    iconAnchor: [width / 2, height],
   });
 };
 

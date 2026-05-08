@@ -46,7 +46,7 @@ export async function searchSubstations(area: string): Promise<AISubstation[]> {
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: `Find 3-5 actual electrical substations in or near ${area}, South Africa.
       Return JSON: name, owner, address, coordinates [lat, lng], voltageKV, mvaCapacity, description.
       Use Google Search.`,
@@ -109,7 +109,7 @@ export async function searchSubstationsByArea(north: number, south: number, east
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: `Find 5-10 actual electrical substations in South Africa near Latitude ${north} to ${south} and Longitude ${west} to ${east}.
       Return JSON: name, owner (utility), address, coordinates [lat, lng], voltageKV, mvaCapacity.`,
       config: {
@@ -171,7 +171,7 @@ export async function searchVacantLandByArea(north: number, south: number, east:
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: `Search for 5-10 actual VACANT LAND, PLOT, or FARM listings for sale in South Africa.
       Geographic Focus: Area around Latitude ${north} to ${south} and Longitude ${west} to ${east}.
       
@@ -265,7 +265,7 @@ export async function findLandListingLinks(north: number, south: number, east: n
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: `Search for actual VACANT LAND, PLOT, or FARM listings for sale in South Africa near this area:
       Latitude ${north} to ${south}, Longitude ${west} to ${east}.${substationContext}
       
@@ -314,14 +314,37 @@ export async function importPropertyListing(input: string): Promise<Property | n
   if (!ai) return null;
 
   try {
+    let promptPrefix = `Find and extract details for South African property listing: ${input}. Use Google Search.`;
+    let tools: any[] = [{ googleSearch: {} }];
+
+    // If input is a URL, try to fetch content directly via our proxy
+    if (input.startsWith('http') && (input.includes('property24.com') || input.includes('privateproperty.co.za'))) {
+      try {
+        const response = await fetch(`/api/fetch-listing?url=${encodeURIComponent(input)}`);
+        if (response.ok) {
+          const content = await response.text();
+          // We found the content, so we can provide it directly to Gemini for extraction
+          // This is much faster and more reliable than search grounding for specific URLs
+          promptPrefix = `Extract property details from the following South African property listing page content.
+          URL: ${input}
+          CONTENT:
+          ${content.substring(0, 10000)} // Buffer limit for Gemini
+          `;
+          tools = []; // Don't need search if we have the content
+        }
+      } catch (proxyError) {
+        console.warn("Proxy fetch failed, falling back to Gemini Search Grounding:", proxyError);
+      }
+    }
+
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
-      contents: `Find and extract details for South African property listing: ${input}.
+      model: "gemini-3-flash-preview",
+      contents: `${promptPrefix}
       Extract to JSON: name, type, description, p24Url, agent(Listing Agent name), agentPhone, address(street, suburb, city, province, country), coordinates[lat, lng], specs(standSize, titleType), financials(price, marketValue).
-      Use Google Search. If it's a Property24 listing, find the specific coordinates for that address. COORDINATES ARE OPTIONAL: If the address is obfuscated or coordinates are hard to find, focus on name/price/agent and leave coordinates as null.`,
+      If it's a Property24 listing, find the specific coordinates for that address. COORDINATES ARE OPTIONAL: If the address is obfuscated or coordinates are hard to find, focus on name/price/agent and leave coordinates as null.`,
       config: {
         responseMimeType: "application/json",
-        tools: [{ googleSearch: {} }],
+        tools: tools,
         responseSchema: {
           type: Type.OBJECT,
           properties: {
@@ -388,7 +411,7 @@ export async function searchSubstationDetails(type: string, value: string): Prom
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: `Find technical details for South African electrical substation (${type}: ${value}). 
       Need: Name, Address, Coordinates [lat, lng], Status, Voltage (kV), Capacity (MVA).
       Use Google Search.`,
