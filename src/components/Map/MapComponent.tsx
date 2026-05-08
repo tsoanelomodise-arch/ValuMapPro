@@ -210,15 +210,15 @@ const createColoredIcon = (color: string, isSelected: boolean = false, label?: s
     className: 'custom-div-icon',
     html: `
       <div class="relative flex flex-col items-center" 
-        style="width: ${width}px; height: ${height}px;"
+        style="width: ${width}px; height: ${height}px; overflow: visible;"
         ${propertyId ? `data-property-id="${propertyId}"` : ''} 
         ${substationId ? `data-substation-id="${substationId}"` : ''}
       >
-        <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-lg flex-shrink-0" style="display: block; width: ${width}px; height: ${height}px;">
-          <path d="M12 0C5.37 0 0 5.37 0 12C0 12 0 12.2 0 12C0 21 12 34 12 34C12 34 24 21 24 12C24 5.37 18.63 0 12 0Z" fill="${color}" stroke="white" stroke-width="1.5"/>
+        <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-lg" style="width: ${width}px; height: ${height}px; display: block;">
+          <path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 34 12 34C12 34 24 21 24 12C24 5.37 18.63 0 12 0Z" fill="${color}" stroke="white" stroke-width="1.5"/>
           <circle cx="12" cy="12" r="3.5" fill="white" opacity="0.9"/>
         </svg>
-        <div class="absolute top-full left-1/2 -translate-x-1/2 mt-0.5 flex flex-col items-center gap-0.5 pointer-events-none w-[120px]">
+        <div class="absolute top-full left-1/2 -translate-x-1/2 mt-1 flex flex-col items-center gap-0.5 pointer-events-none w-[120px]">
           ${label ? `
             <div class="px-1 py-0 select-none text-center">
                 <span class="text-[7px] font-bold uppercase whitespace-nowrap leading-none drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]" style="color: ${color}">${label}</span>
@@ -252,14 +252,14 @@ const createCandidateIcon = (isSelected: boolean = false, label?: string, isProp
   return L.divIcon({
     className: `custom-div-icon candidate-icon ${isProperty ? 'property-candidate' : 'station-candidate'}`,
     html: `
-      <div class="relative flex flex-col items-center" style="width: ${width}px; height: ${height}px;">
+      <div class="relative flex flex-col items-center" style="width: ${width}px; height: ${height}px; overflow: visible;">
         <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-${isProperty ? 'emerald' : 'slate'}-500/20 rounded-full blur-md animate-pulse"></div>
-        <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-2xl relative z-10 flex-shrink-0" style="display: block; width: ${width}px; height: ${height}px;">
+        <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-2xl relative z-10" style="width: ${width}px; height: ${height}px; display: block;">
           <path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 34 12 34C12 34 24 21 24 12C24 5.37 18.63 0 12 0Z" fill="${color}" stroke="white" stroke-width="2"/>
           <path d="M12 8V16M8 12H16" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
         </svg>
         ${label ? `
-          <div class="absolute top-full left-1/2 -translate-x-1/2 mt-1 px-2 py-0.5 bg-white/90 backdrop-blur-sm rounded-md shadow-sm border border-slate-200 select-none relative z-10 max-w-[120px] text-center">
+          <div class="absolute top-full left-1/2 -translate-x-1/2 mt-1 px-2 py-0.5 bg-white/90 backdrop-blur-sm rounded-md shadow-sm border border-slate-200 select-none z-10 max-w-[120px] text-center">
               <span class="text-[8px] font-black ${isProperty ? 'text-emerald-700' : 'text-slate-700'} uppercase whitespace-nowrap leading-none tracking-wider block truncate">${label}</span>
           </div>
         ` : ''}
@@ -327,11 +327,25 @@ const CandidatePropertyLayerGroup = ({ properties, onAdd, onDelete, selectedId }
               
               <div className="space-y-1.5 mb-4">
                 <p className="text-[10px] text-slate-500 m-0 leading-relaxed italic">{property.address.street}, {property.address.suburb}</p>
-                {property.financials?.purchasePrice && (
-                  <p className="text-[9px] font-black text-slate-700 bg-slate-50 px-1.5 py-0.5 rounded inline-block">
-                    R {(property.financials.purchasePrice / 1000000).toFixed(1)}M
-                  </p>
-                )}
+                <div className="flex items-center justify-between gap-2 mt-2">
+                  {property.financials?.purchasePrice && (
+                    <p className="text-[9px] font-black text-slate-700 bg-slate-50 px-1.5 py-0.5 rounded inline-block">
+                      R {(property.financials.purchasePrice / 1000000).toFixed(1)}M
+                    </p>
+                  )}
+                  {property.p24Url && (
+                    <a 
+                      href={property.p24Url} 
+                      target="_blank" 
+                      referrerPolicy="no-referrer"
+                      className="text-[9px] font-black text-blue-600 hover:underline flex items-center gap-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      View Listing
+                      <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                  )}
+                </div>
               </div>
 
               <div className="flex flex-col gap-2">
@@ -1155,11 +1169,11 @@ export default function MapComponent({
         <MapEvents />
       </MapContainer>
 
-      <div className="absolute top-4 left-4 z-[1000] flex flex-col gap-2" data-html2canvas-ignore="true">
+      <div className="absolute top-4 left-4 z-[1000] flex flex-col gap-2 items-start" data-html2canvas-ignore="true">
         <button
           onClick={() => setSelectedBasemapId(selectedBasemapId === 'satellite' ? 'streets' : 'satellite')}
           className={cn(
-            "p-3 rounded-xl shadow-xl transition-all border",
+            "w-11 h-11 flex items-center justify-center rounded-xl shadow-xl transition-all border",
             selectedBasemapId === 'satellite' ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
           )}
           title="Quick Toggle Satellite"
@@ -1170,7 +1184,7 @@ export default function MapComponent({
         <button
           onClick={() => setIsLayerPanelOpen(!isLayerPanelOpen)}
           className={cn(
-            "p-3 rounded-xl shadow-xl transition-all border",
+            "w-11 h-11 flex items-center justify-center rounded-xl shadow-xl transition-all border",
             isLayerPanelOpen ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
           )}
           title="Map Layer Settings"
@@ -1302,12 +1316,12 @@ export default function MapComponent({
           </div>
         )}
 
-        <div className="h-px w-full bg-slate-100 my-1" />
+        <div className="h-px w-full max-w-[44px] bg-slate-100 my-1" />
 
         <button
           onClick={() => onRulerActiveChange(!rulerActive)}
           className={cn(
-            "p-3 rounded-xl shadow-xl transition-all border",
+            "w-11 h-11 flex items-center justify-center rounded-xl shadow-xl transition-all border",
             rulerActive ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
           )}
           title="Distance Ruler"
@@ -1317,7 +1331,7 @@ export default function MapComponent({
 
         <button
           onClick={() => onFullscreenChange(!isFullscreen)}
-          className="p-3 bg-white rounded-xl shadow-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+          className="w-11 h-11 flex items-center justify-center bg-white rounded-xl shadow-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
           title="Toggle Fullscreen"
         >
           {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -1326,14 +1340,14 @@ export default function MapComponent({
         <div className="flex flex-col bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden" data-html2canvas-ignore="true">
           <button
             onClick={() => mapInstanceRef.current?.zoomIn()}
-            className="p-3 text-slate-600 hover:bg-slate-50 transition-colors border-b border-slate-100"
+            className="w-11 h-11 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors border-b border-slate-100"
             title="Zoom In"
           >
             <Maximize2 className="w-4 h-4 rotate-45 scale-75" />
           </button>
           <button
             onClick={() => mapInstanceRef.current?.zoomOut()}
-            className="p-3 text-slate-600 hover:bg-slate-50 transition-colors"
+            className="w-11 h-11 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors"
             title="Zoom Out"
           >
             <Minimize2 className="w-4 h-4 rotate-45 scale-75" />
@@ -1343,7 +1357,7 @@ export default function MapComponent({
         <button
           onClick={() => setIsSelectingForExport(!isSelectingForExport)}
           className={cn(
-            "p-3 rounded-xl shadow-xl transition-all border",
+            "w-11 h-11 flex items-center justify-center rounded-xl shadow-xl transition-all border",
             isSelectingForExport ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
           )}
           title="Map Report & Export"
@@ -1370,7 +1384,7 @@ export default function MapComponent({
                   }
                 }}
                 className={cn(
-                  "p-3 rounded-xl shadow-xl transition-all border relative flex items-center justify-center",
+                  "w-11 h-11 flex items-center justify-center rounded-xl shadow-xl transition-all border relative",
                   isDiscovering 
                     ? "bg-amber-500 text-white border-amber-600 hover:bg-amber-600 shadow-amber-200/50" 
                     : "bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 active:scale-95"
@@ -1415,7 +1429,7 @@ export default function MapComponent({
                     }
                   }}
                   className={cn(
-                    "p-3 rounded-xl shadow-xl transition-all border relative flex items-center justify-center overflow-hidden",
+                    "w-11 h-11 flex items-center justify-center rounded-xl shadow-xl transition-all border relative overflow-hidden",
                     isDiscoveringLand 
                       ? "bg-emerald-500 text-white border-emerald-600 hover:bg-emerald-600 shadow-emerald-200/50" 
                       : (selectedSubstation 
@@ -1460,7 +1474,7 @@ export default function MapComponent({
             {onClearCandidates && (candidateSubstations.length > 0 || candidateProperties.length > 0) && !isDiscovering && !isDiscoveringLand && (
               <button
                 onClick={onClearCandidates}
-                className="p-3 bg-white text-slate-400 hover:text-red-500 rounded-xl shadow-xl transition-all border border-slate-200 hover:border-red-100"
+                className="w-11 h-11 flex items-center justify-center bg-white text-slate-400 hover:text-red-500 rounded-xl shadow-xl transition-all border border-slate-200 hover:border-red-100"
                 title="Clear Discovery Results"
               >
                 <X className="w-4 h-4" />

@@ -1120,6 +1120,21 @@ export default function App() {
                     <p className="text-sm font-bold text-slate-700">{pendingProperty.specs.standSize} m²</p>
                   </div>
                 </div>
+
+                {pendingProperty.p24Url && (
+                  <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">External Reference</p>
+                    <a 
+                      href={pendingProperty.p24Url} 
+                      target="_blank" 
+                      referrerPolicy="no-referrer"
+                      className="text-[10px] font-black text-blue-600 hover:underline flex items-center gap-1.5 px-3 py-1 bg-blue-50 rounded-lg transition-colors"
+                    >
+                      View on Property24
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3">
