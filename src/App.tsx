@@ -25,6 +25,8 @@ import {
   Zap,
   ChevronLeft,
   ChevronRight,
+  Minimize2,
+  Maximize2,
   Database
 } from 'lucide-react';
 import { 
@@ -114,6 +116,7 @@ export default function App() {
   const [substationsToDelete, setSubstationsToDelete] = useState<string[] | null>(null);
   const [isSubstationModalOpen, setIsSubstationModalOpen] = useState(false);
   const [isSpatialPanelOpen, setIsSpatialPanelOpen] = usePersistedState('is-spatial-panel-open', true);
+  const [isSpatialPanelWide, setIsSpatialPanelWide] = usePersistedState('is-spatial-panel-wide', false);
   const [substationToEdit, setSubstationToEdit] = useState<Substation | null>(null);
   const [substationToDelete, setSubstationToDelete] = useState<null | string>(null);
   const [isDuplicateWarningOpen, setIsDuplicateWarningOpen] = useState(false);
@@ -323,7 +326,7 @@ export default function App() {
               description: coordinatesFlag === 'approximate' 
                 ? `${res.description || ''} (Approximate location based on anchor)`.trim()
                 : res.description,
-              type: 'Agricultural',
+              type: res.type || 'Vacant Land',
               specs: res.specs || { standSize: 1000, titleType: 'Full title' },
               financials: {
                 purchasePrice: res.financials?.purchasePrice || 0,
@@ -707,7 +710,7 @@ export default function App() {
                   <button 
                     onClick={() => setIsSpatialPanelOpen(!isSpatialPanelOpen)}
                     className={cn(
-                      "flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[10px] font-black uppercase tracking-[0.2em] z-20",
+                      "flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[10px] font-black uppercase tracking-[0.2em] z-20 shadow-sm",
                       isSpatialPanelOpen 
                         ? "bg-slate-900 text-white border-slate-900 shadow-lg" 
                         : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
@@ -725,6 +728,22 @@ export default function App() {
                       </>
                     )}
                   </button>
+
+                  {isSpatialPanelOpen && (
+                    <button
+                      onClick={() => setIsSpatialPanelWide(!isSpatialPanelWide)}
+                      className={cn(
+                        "flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[10px] font-black uppercase tracking-[0.2em] z-20",
+                        isSpatialPanelWide
+                          ? "bg-indigo-600 text-white border-indigo-600 shadow-md"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                      )}
+                      title={isSpatialPanelWide ? "Narrow View" : "Wide View"}
+                    >
+                      {isSpatialPanelWide ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                      {isSpatialPanelWide ? "Narrow Index" : "Expand Index"}
+                    </button>
+                  )}
                   <div className="h-4 w-px bg-slate-200 mx-1 hidden md:block" />
                   <div>
                     <h1 className="text-xl font-bold text-slate-800 tracking-tight">
@@ -763,9 +782,13 @@ export default function App() {
                  <div className="absolute inset-0 flex">
                    <div className={cn(
                      "h-full overflow-hidden shrink-0 transition-all duration-500 ease-in-out relative",
-                     isSpatialPanelOpen ? "w-80 opacity-100 mr-4" : "w-0 opacity-0 pointer-events-none mr-0"
+                     !isSpatialPanelOpen ? "w-0 opacity-0 pointer-events-none mr-0" : 
+                     isSpatialPanelWide ? "w-[500px] opacity-100 mr-4" : "w-80 opacity-100 mr-4"
                    )}>
-                     <div className="w-80 h-full border border-slate-100 rounded-2xl shadow-sm bg-white overflow-hidden">
+                     <div className={cn(
+                       "h-full border border-slate-100 rounded-2xl shadow-sm bg-white overflow-hidden transition-all duration-500",
+                       isSpatialPanelWide ? "w-[500px]" : "w-80"
+                     )}>
                        <SpatialCatalog 
                          properties={filteredProperties}
                          candidateProperties={filteredCandidateProperties}

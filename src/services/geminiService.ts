@@ -82,7 +82,6 @@ export async function searchSubstations(area: string): Promise<AISubstation[]> {
       }
     });
 
-    console.log("Substation Search Response:", response);
     const text = response.text || '';
     if (!text) {
       console.warn("Substation Search: Gemini returned empty text.", response);
@@ -144,7 +143,6 @@ export async function searchSubstationsByArea(north: number, south: number, east
       }
     });
 
-    console.log("Substation Area Discovery Response:", response);
     const text = response.text || '';
     if (!text) {
       console.warn("Substation Area: Gemini returned empty text.", response);
@@ -172,21 +170,12 @@ export async function searchVacantLandByArea(north: number, south: number, east:
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Search for 5-10 actual VACANT LAND, PLOT, or FARM listings for sale in South Africa.
+      contents: `Search for 5-10 actual VACANT LAND, UNIMPROVED PLOT, or FARM listings for sale in South Africa.
       Geographic Focus: Area around Latitude ${north} to ${south} and Longitude ${west} to ${east}.
       
-      Look for listings on Property24 (property24.com) and Private Property (privateproperty.co.za).
+      CRITICAL: ONLY return vacant land, plots, or agricultural farms. EXCLUDE residential houses, apartments, office buildings, or developed retail space.
       
-      Return as JSON with:
-      - name: Listing title
-      - type: 'Vacant Land' or 'Agricultural'
-      - description: Brief summary
-      - p24Url: Full directo URL to the listing on Property24
-      - address: { suburb, city, province, country: 'South Africa' }
-      - coordinates: [lat, lng]
-      - financials: { purchasePrice: number in ZAR }
-      
-      Important: Ensure coordinates are accurate for the specific properties found.`,
+      Look for listings on Property24 (property24.com) and Private Property (privateproperty.co.za).`,
       config: {
         responseMimeType: "application/json",
         tools: [{ googleSearch: {} }],
@@ -199,7 +188,7 @@ export async function searchVacantLandByArea(north: number, south: number, east:
                 type: Type.OBJECT,
                 properties: {
                   name: { type: Type.STRING },
-                  type: { type: Type.STRING },
+                  type: { type: Type.STRING, enum: ['Vacant Land', 'Agricultural'] },
                   description: { type: Type.STRING },
                   p24Url: { type: Type.STRING },
                   address: {
@@ -224,7 +213,7 @@ export async function searchVacantLandByArea(north: number, south: number, east:
                     }
                   }
                 },
-                required: ["name", "address", "coordinates", "p24Url"]
+                required: ["name", "address", "coordinates", "p24Url", "type"]
               }
             }
           },
@@ -233,7 +222,6 @@ export async function searchVacantLandByArea(north: number, south: number, east:
       }
     });
 
-    console.log("Gemini Land Discovery Response:", response);
     const text = response.text || '';
     
     if (!text) {
@@ -264,16 +252,19 @@ export async function findLandListingLinks(north: number, south: number, east: n
                         anchorSubstation.coordinates.length >= 2;
 
   const substationContext = hasValidCoords
-    ? `\nCRITICAL TARGET: You MUST find vacant land listings specifically within a 3km radius of the "${anchorSubstation.name}" substation located at ${anchorSubstation.coordinates[0]}, ${anchorSubstation.coordinates[1]}. This is an anchor point. Prioritize listings that mention proximity to electrical infrastructure or this specific station if possible.`
+    ? `\nCRITICAL TARGET: You MUST find VACANT LAND, UNIMPROVED PLOTS, or FARMS specifically within a 3km radius of the "${anchorSubstation.name}" substation located at ${anchorSubstation.coordinates[0]}, ${anchorSubstation.coordinates[1]}. This is an anchor point. Prioritize listings that mention proximity to electrical infrastructure or this specific station if possible.
+       STRICT EXCLUSION: Do NOT return links to houses, apartments, or commercial buildings.`
     : "";
 
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Search for actual VACANT LAND, PLOT, or FARM listings for sale in South Africa near this area:
+      contents: `Search for actual VACANT LAND, UNIMPROVED PLOT, or FARM listings for sale in South Africa near this area:
       Latitude ${north} to ${south}, Longitude ${west} to ${east}.${substationContext}
       
       Focus on Property24 (property24.com) and Private Property.
+      
+      CRITICAL: EXCLUDE all residential houses, townhouses, apartments, and developed commercial properties. We only want undeveloped land or farms.
       
       Return ONLY a JSON object with a 'links' array containing the full URLs for each property found.`,
       config: {
@@ -292,7 +283,6 @@ export async function findLandListingLinks(north: number, south: number, east: n
       }
     });
 
-    console.log("Gemini Land Link Discovery Response:", response);
     const text = response.text || '';
     if (!text) {
       console.warn("Gemini returned empty text for land link discovery.");
@@ -357,6 +347,11 @@ export async function importPropertyListing(input: string): Promise<Property | n
       model: "gemini-3-flash-preview",
       contents: `${promptPrefix}
       Extract to JSON: name, type, description, p24Url, agent(Listing Agent name), agentPhone, address(street, suburb, city, province, country), coordinates[lat, lng], specs(standSize, titleType), financials(price, marketValue).
+      
+      STRICT REQUIREMENT: This tool is ONLY for VACANT LAND, PLOTS, and FARMS. 
+      If the property is a residential house (with bedrooms/bathrooms mentioned as a primary feature), apartment, or office block, DO NOT label it as 'Residential'. 
+      We prefer everything to be classified as either 'Vacant Land' (unimproved) or 'Agricultural' (farms).
+      
       If it's a Property24 listing, find the specific coordinates for that address. COORDINATES ARE OPTIONAL: If the address is obfuscated or coordinates are hard to find, focus on name/price/agent and leave coordinates as null.`,
       config: {
         responseMimeType: "application/json",
@@ -367,7 +362,7 @@ export async function importPropertyListing(input: string): Promise<Property | n
             name: { type: Type.STRING },
             agent: { type: Type.STRING },
             agentPhone: { type: Type.STRING },
-            type: { type: Type.STRING, enum: ['Residential', 'Commercial', 'Industrial', 'Agricultural'] },
+            type: { type: Type.STRING, enum: ['Vacant Land', 'Agricultural'] },
             description: { type: Type.STRING },
             p24Url: { type: Type.STRING },
             address: {
@@ -401,7 +396,6 @@ export async function importPropertyListing(input: string): Promise<Property | n
       }
     });
 
-    console.log("Property Import Response:", response);
     const text = response.text || '';
     if (!text) {
       console.warn("Property Import: Gemini returned empty text.", response);
@@ -452,7 +446,6 @@ export async function searchSubstationDetails(type: string, value: string): Prom
       }
     });
 
-    console.log("Substation Detail Response:", response);
     const text = response.text || '';
     if (!text) {
       console.warn("Substation Detail: Gemini returned empty text.", response);

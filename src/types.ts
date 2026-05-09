@@ -1,4 +1,4 @@
-export type PropertyType = 'Residential' | 'Commercial' | 'Industrial' | 'Agricultural';
+export type PropertyType = 'Residential' | 'Commercial' | 'Industrial' | 'Agricultural' | 'Vacant Land';
 
 export interface Property {
   id: string;
@@ -41,6 +41,7 @@ export const PROPERTY_TYPE_COLORS: Record<PropertyType, string> = {
   'Commercial': '#ef4444', // red
   'Industrial': '#10b981', // green
   'Agricultural': '#854d0e', // brown/olive
+  'Vacant Land': '#f59e0b', // amber/orange
 };
 
 export interface Substation {
