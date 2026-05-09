@@ -329,6 +329,7 @@ export default function MapComponent(props: MapComponentProps) {
   } = props;
 
   const map = useMap();
+  const [showDiscoveryOverlay, setShowDiscoveryOverlay] = useState(true);
   const [selectedBasemapId, setSelectedBasemapId] = useState<'streets' | 'satellite' | 'terrain' | 'hybrid'>('streets');
   const [isLayerPanelOpen, setIsLayerPanelOpen] = useState(false);
   const [isExportPanelOpen, setIsExportPanelOpen] = useState(false);
@@ -636,8 +637,21 @@ export default function MapComponent(props: MapComponentProps) {
       </div>
 
       {/* Discovery Trigger Overlay */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50">
-        <div className="bg-white/95 backdrop-blur-md px-6 py-4 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] border border-slate-200 flex items-center gap-6 min-w-[400px]">
+      {showDiscoveryOverlay && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 group">
+          <div className="relative bg-white/95 backdrop-blur-md px-6 py-4 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] border border-slate-200 flex items-center gap-6 min-w-[400px]">
+            {/* Close button for the overlay */}
+            <button 
+              onClick={() => {
+                setShowDiscoveryOverlay(false);
+                onCancelDiscovery?.();
+              }}
+              className="absolute -top-2 -right-2 w-6 h-6 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+              title="Dismiss Discovery Overlay"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+
           <div className="flex flex-col">
             <span className="text-[10px] font-black italic text-indigo-600 uppercase tracking-widest mb-1">Discovery Mode</span>
             <div className="flex items-center gap-2">
@@ -684,6 +698,7 @@ export default function MapComponent(props: MapComponentProps) {
           </div>
         </div>
       </div>
+    )}
 
       {rulerActive && rulerDistance && (
         <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50">
