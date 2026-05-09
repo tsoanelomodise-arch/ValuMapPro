@@ -62,13 +62,19 @@ export default function SubstationAddForm({ onAdd, onShowCandidates, isSubmittin
         safeCoords = [-26.1311, 28.0536];
       } else {
         let [lat, lng] = safeCoords;
-        // South Africa specific coordinate correction: Lats are negative, Lngs are positive
-        if (lat > 0 && lng < 0) {
-          [lat, lng] = [lng, lat];
-        } else if (lat > 0 && lng > 0 && lat < 18) { // Likely swapped lat/lng for SA
-           [lat, lng] = [lng, lat];
+        // South Africa Coordinate Correction (SA Lat is always negative, Lng always positive)
+        // Case 1: Swapped + Wrong Sign [Lng, -Lat] -> [28, 26]
+        if (lat > 15 && lat < 35 && lng > 20 && lng < 40) {
+           safeCoords = [-lat, lng];
+        } 
+        // Case 2: Swapped [Lng, Lat] -> [28, -26]
+        else if (lat > 15 && lat < 35 && lng < -20 && lng > -36) {
+           safeCoords = [lng, lat];
         }
-        safeCoords = [lat, lng];
+        // Case 3: Just positive Lat [Lat, Lng] -> [26, 28]
+        else if (lat > 0 && lat < 40 && lng > 15 && lng < 35) {
+           safeCoords = [-lat, lng];
+        }
       }
       return {
         id: Math.random().toString(36).substr(2, 9),

@@ -39,6 +39,18 @@
   - Visualized Discovery Area: Added a synchronized 1km visual radius ring on the map during land scans.
   - Maintained Substation Discovery: Kept infrastructure discovery parameters at full regional scale while tightening land search focus.
 
+- **v1.8 (2026-05-10)**: System Stability & Core Refactor.
+  - Core Refactoring: Performed major architectural cleanup of `App.tsx` by extracting several features into custom hooks (`useDiscovery`, `useImport`, `useNotifications`).
+  - AI Service Optimization: Standardized all AI requests through a unified `generateAIContent` helper, reducing code repetition and improving error handling.
+  - Search Hardening: Enforced strict `property24.com` filtering across all discovery and textual search tools. Explicitly excluded `property24.co.ke` (Kenya) to maintain South African regional focus.
+  - Availability Guard: Implemented automatic detection and exclusion of Property24 listings that are no longer available.
+  - Spatial Precision: Strictly reduced land discovery focus to a 1km visual and algorithmic radius from selected substations.
+  - Substation Discovery Hardening: Implemented strict coordinate validation and bounding-box filtering for substation discovery to prevent "off-map" placements.
+  - Coordinate Correction: Improved heuristic for detecting and fixing swapped or signed-incorrect coordinates from AI models.
+  - Improved State Management: Moved persistence logic into separate hooks and stabilized geocoding-led discovery flows.
+  - Notification System: Robust notification bus for asynchronous AI feedback.
+  - Clean Code Initiative: Removed dead code and standardized coordinated-handling across the stack.
+
 - **v1.7 (2026-05-09)**: Unified Location & Property Search.
   - Enhanced Global Search: The location search bar now automatically triggers a property discovery scan for the geocoded area.
   - Implemented textual property discovery: Users can search for land by suburb or city name, matching the core Property24 user experience.

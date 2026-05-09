@@ -29,46 +29,12 @@ import {
   Maximize2,
   Database
 } from 'lucide-react';
-import { 
-  searchSubstations, 
-  searchSubstationsByArea, 
-  searchVacantLandByArea, 
-  findLandListingLinks,
-  importPropertyListing,
-  searchSubstationDetails,
-  geocodeLocation,
-  searchVacantLandByLocationName,
-  AISubstation 
-} from './services/geminiService';
+import { searchVacantLandByLocationName, geocodeLocation, AISubstation } from './services/geminiService';
 import { cn } from './lib/utils';
-// Remove motion import if causing blank screen issues
-// import { motion, AnimatePresence } from 'motion/react';
-
-// Custom hook for local storage persistence
-function usePersistedState<T>(key: string, defaultValue: T | (() => T)) {
-  const [state, setState] = useState<T>(() => {
-    try {
-      const saved = localStorage.getItem(key);
-      if (saved && saved !== 'undefined') {
-        return JSON.parse(saved);
-      }
-    } catch (e) {
-      console.warn(`Failed to parse persisted state for key "${key}":`, e);
-    }
-    return typeof defaultValue === 'function' ? (defaultValue as () => T)() : defaultValue;
-  });
-
-  useEffect(() => {
-    if (state === undefined) return;
-    try {
-      localStorage.setItem(key, JSON.stringify(state));
-    } catch (e) {
-      console.warn(`Failed to persist state for key "${key}":`, e instanceof Error ? e.message : 'Circular structure likely detected');
-    }
-  }, [key, state]);
-
-  return [state, setState] as const;
-}
+import { usePersistedState } from './hooks/usePersistedState';
+import { useNotifications } from './hooks/useNotifications';
+import { useDiscovery } from './hooks/useDiscovery';
+import { useImport } from './hooks/useImport';
 
 import SubstationEditModal from './components/Modals/SubstationEditModal';
 import SubstationAddForm from './components/Modals/SubstationAddForm';
@@ -111,8 +77,6 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [importValue, setImportValue] = useState('');
-  const [isImporting, setIsImporting] = useState(false);
   const [propertyToDelete, setPropertyToDelete] = useState<string | null>(null);
   const [propertiesToDelete, setPropertiesToDelete] = useState<string[] | null>(null);
   const [substationsToDelete, setSubstationsToDelete] = useState<string[] | null>(null);
@@ -129,42 +93,44 @@ export default function App() {
   const [hiddenPropertyIds, setHiddenPropertyIds] = usePersistedState<string[]>('propscope_hidden_properties', []);
   const [candidateSubstations, setCandidateSubstations] = usePersistedState<Substation[]>('propscope_candidate_substations', []);
   const [candidateProperties, setCandidateProperties] = usePersistedState<Property[]>('propscope_candidate_properties', []);
-  const [isDiscovering, setIsDiscovering] = useState(false);
-  const [isDiscoveringLand, setIsDiscoveringLand] = useState(false);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
-  const [discoveryProgress, setDiscoveryProgress] = useState<{ current: number, total: number } | null>(null);
-  const [notifications, setNotifications] = useState<{ id: string, message: string, type: 'success' | 'error' | 'info' }[]>([]);
-  const discoveryAbortControllerRef = React.useRef<AbortController | null>(null);
-  const importAbortControllerRef = React.useRef<AbortController | null>(null);
 
-  const handleCancelDiscovery = useCallback(() => {
-    if (discoveryAbortControllerRef.current) {
-      discoveryAbortControllerRef.current.abort();
-      discoveryAbortControllerRef.current = null;
-    }
-    setIsDiscovering(false);
-    setIsDiscoveringLand(false);
-    setDiscoveryProgress(null);
-  }, []);
+  const { notifications, addNotification, removeNotification } = useNotifications();
 
-  const handleCancelImport = useCallback(() => {
-    if (importAbortControllerRef.current) {
-      importAbortControllerRef.current.abort();
-      importAbortControllerRef.current = null;
-    }
-    setIsImporting(false);
-    setIsImportModalOpen(false);
-    setIsSubstationModalOpen(false);
-  }, []);
+  const {
+    isDiscovering,
+    isDiscoveringLand,
+    discoveryProgress,
+    handleDiscoverNearby,
+    handleDiscoverLand,
+    handleCancelDiscovery
+  } = useDiscovery({
+    substations,
+    setCandidateSubstations,
+    candidateSubstations,
+    setCandidateProperties,
+    addNotification,
+    selectedSubstation
+  });
 
-  const addNotification = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
-    const id = Math.random().toString(36).substring(2, 9);
-    setNotifications(prev => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setNotifications(prev => prev.filter(n => n.id !== id));
-    }, 5000);
-  }, []);
+  const {
+    isImporting,
+    importValue,
+    setImportValue,
+    handleImportProperty,
+    handleAddSubstation,
+    handleCancelImport
+  } = useImport({
+    setPendingProperty,
+    setPendingSubstation,
+    setCandidateSubstations,
+    setSubstations,
+    setView,
+    setIsImportModalOpen,
+    setIsSubstationModalOpen,
+    addNotification
+  });
 
   const togglePropertyVisibility = useCallback((id: string) => {
     setHiddenPropertyIds(prev => 
@@ -174,16 +140,9 @@ export default function App() {
 
   const handleAddLandToPortfolio = useCallback((land: Property) => {
     setProperties(prev => {
-      // Remove the candidate ID prefix to make it a permanent record
-      const newLand = { 
-        ...land, 
-        id: land.id.replace('candidate-land-', 'prop-'),
-        // Ensure it's not marked as candidate anymore if we use a flag in future
-      };
-      // Remove the candidate from the list and add the "real" one
+      const newLand = { ...land, id: land.id.replace('candidate-land-', 'prop-') };
       return [newLand, ...prev.filter(p => p.id !== land.id)];
     });
-    // Keep detail open but update selected property to the new one
     setSelectedProperty(prev => prev?.id === land.id ? { ...land, id: land.id.replace('candidate-land-', 'prop-') } : prev);
   }, [setProperties]);
 
@@ -211,11 +170,9 @@ export default function App() {
         setMapCenter(result.coordinates);
         addNotification(`Geocoded ${result.name}. Searching for Properties...`, 'info');
         
-        // Optionally clear selection so the map uses mapCenter
         setSelectedProperty(null);
         setSelectedSubstation(null);
 
-        // Trigger Property Discovery by Name
         const foundLand = await searchVacantLandByLocationName(location);
         if (foundLand.length > 0) {
           setCandidateProperties(prev => {
@@ -285,211 +242,8 @@ export default function App() {
     [...filteredSubstations, ...filteredCandidateSubstations], 
     [filteredSubstations, filteredCandidateSubstations]);
 
-  const handleDiscoverLand = useCallback(async (bounds: { north: number, south: number, east: number, west: number }) => {
-    if (!selectedSubstation) {
-      addNotification("Please select an anchor substation first to focus the discovery.", 'info');
-      return;
-    }
-
-    if (discoveryAbortControllerRef.current) {
-      discoveryAbortControllerRef.current.abort();
-    }
-    const controller = new AbortController();
-    discoveryAbortControllerRef.current = controller;
-
-    setIsDiscoveringLand(true);
-    // Don't clear properties anymore, let them accumulate
-    setDiscoveryProgress({ current: 0, total: 1 }); // Start with indeterminate phase
-    
-    console.log("Starting Land Discovery anchored by:", selectedSubstation.name);
-    try {
-      // Phase 1: Find listing links
-      addNotification(`Searching near ${selectedSubstation.name}...`, 'info');
-      console.log("Land Discovery: Searching area", { north: bounds.north, south: bounds.south, east: bounds.east, west: bounds.west, anchor: selectedSubstation.name });
-      const links = await findLandListingLinks(bounds.north, bounds.south, bounds.east, bounds.west, selectedSubstation);
-      console.log("Land Discovery: Found links", links);
-      
-      if (controller.signal.aborted) return;
-
-      if (!links || links.length === 0) {
-        addNotification("No vacant land listings found in this area. Try zooming out or moving the map.", 'info');
-        setIsDiscoveringLand(false);
-        setDiscoveryProgress(null);
-        return;
-      }
-
-      addNotification(`Found ${links.length} candidate URLs. Harvesting details...`, 'info');
-      setDiscoveryProgress({ current: 0, total: links.length });
-      
-      // Phase 2: Iterate and discover details one by one
-      let count = 0;
-      for (let i = 0; i < links.length; i++) {
-        if (controller.signal.aborted) break;
-        
-        const link = links[i];
-        setDiscoveryProgress(prev => prev ? { ...prev, current: i + 1 } : null);
-        
-        try {
-          const res = await importPropertyListing(link);
-          if (res && !controller.signal.aborted) {
-            // Extract coordinates and handle South Africa specifics
-            let finalCoords = res.coordinates;
-            let coordinatesFlag: 'precise' | 'approximate' = 'precise';
-
-            if (Array.isArray(finalCoords) && finalCoords.length >= 2) {
-              let [lat, lng] = finalCoords;
-              // In SA, lat is negative (~ -22 to -35) and lng is positive (~ 16 to 33)
-              // Handle potential flipped or positive inputs from model
-              if (lat > 0 && lng < 0) {
-                finalCoords = [lng, lat];
-              } else if (lat > 0 && lat < 40 && lng > 0) {
-                finalCoords = [-lat, lng];
-              }
-            }
-
-            // Fallback for missing coordinates: jitter around anchor substation
-            if (!finalCoords || !Array.isArray(finalCoords) || isNaN(finalCoords[0])) {
-               console.warn("Using jittered anchor coordinates for property due to missing precise coordinates:", res.name);
-               coordinatesFlag = 'approximate';
-               
-               const subCoords = (selectedSubstation && selectedSubstation.coordinates && Array.isArray(selectedSubstation.coordinates)) 
-                 ? selectedSubstation.coordinates 
-                 : [-26.1, 28.1] as [number, number]; // Fallback to generic Gauteng if everything fails
-
-               // Add 500m-1km random jitter relative to substation
-               const jitter = () => (Math.random() - 0.5) * 0.01; 
-               finalCoords = [
-                 subCoords[0] + jitter(),
-                 subCoords[1] + jitter()
-               ];
-            }
-
-            const newCandidate: Property = {
-              ...res,
-              id: `candidate-land-${Date.now()}-${i}`,
-              coordinates: finalCoords as [number, number],
-              coordinatesFlag,
-              description: coordinatesFlag === 'approximate' 
-                ? `${res.description || ''} (Approximate location based on anchor)`.trim()
-                : res.description,
-              type: res.type || 'Vacant Land',
-              specs: res.specs || { standSize: 1000, titleType: 'Full title' },
-              financials: {
-                purchasePrice: res.financials?.purchasePrice || 0,
-                marketValue: res.financials?.marketValue || (res.financials?.purchasePrice ? res.financials.purchasePrice * 1.1 : 1000000)
-              }
-            };
-            
-            console.log("Adding candidate property:", newCandidate.name, finalCoords);
-            setCandidateProperties(prev => {
-              // Avoid duplicates by name and approx coordinates
-              const isDuplicate = prev.some(existing => {
-                if (!existing.coordinates || !newCandidate.coordinates) return existing.name.toLowerCase() === newCandidate.name.toLowerCase();
-                return existing.name.toLowerCase() === newCandidate.name.toLowerCase() ||
-                (Math.abs(existing.coordinates[0] - newCandidate.coordinates[0]) < 0.0001 && 
-                 Math.abs(existing.coordinates[1] - newCandidate.coordinates[1]) < 0.0001);
-              });
-              if (isDuplicate) return prev;
-              return [...prev, newCandidate];
-            });
-            count++;
-          }
-        } catch (e) {
-          console.warn(`Failed to import property ${link}:`, e);
-        }
-      }
-
-      if (count > 0) {
-        addNotification(`Successfully discovered and listed ${count} vacant land listings near the anchor substation.`, 'success');
-      } else if (!controller.signal.aborted) {
-        addNotification("No vacant land listings found in this area. No results from Property24 / Private Property index.", 'info');
-      }
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') return;
-      console.error("Land discovery failed:", error);
-      addNotification("Land discovery failed. Please try again.", 'error');
-    } finally {
-      if (!discoveryAbortControllerRef.current || discoveryAbortControllerRef.current === controller) {
-        setIsDiscoveringLand(false);
-        setDiscoveryProgress(null);
-        discoveryAbortControllerRef.current = null;
-      }
-    }
-  }, [addNotification, selectedSubstation]);
-
-  const handleDiscoverNearby = useCallback(async (bounds: { north: number, south: number, east: number, west: number }) => {
-    if (discoveryAbortControllerRef.current) {
-      discoveryAbortControllerRef.current.abort();
-    }
-    const controller = new AbortController();
-    discoveryAbortControllerRef.current = controller;
-
-    setIsDiscovering(true);
-    try {
-      const results = await searchSubstationsByArea(bounds.north, bounds.south, bounds.east, bounds.west);
-      
-      if (controller.signal.aborted) return;
-
-      const newCandidates: Substation[] = results.map((res, index) => {
-        let finalCoords = res.coordinates;
-        if (Array.isArray(finalCoords) && finalCoords.length >= 2) {
-          let [lat, lng] = finalCoords;
-          // SA Flip logic
-          if (lat > 0 && lng < 0) {
-            finalCoords = [lng, lat];
-          } else if (lat > 0 && lat < 40 && lng > 0) {
-            finalCoords = [-lat, lng];
-          }
-        }
-
-        return {
-          id: `candidate-${Date.now()}-${index}`,
-          name: res.name,
-          owner: res.owner,
-          address: res.address,
-          coordinates: finalCoords as [number, number],
-          status: 'Planned',
-          voltageKV: res.voltageKV,
-          mvaCapacity: res.mvaCapacity,
-          capacity: res.voltageKV ? `${res.voltageKV}kV` : undefined
-        };
-      });
-
-      // Filter out candidates that are already in our substations list or already in candidates
-      const filteredCandidates = newCandidates.filter(candidate => {
-        const inMain = substations.some(s => {
-          if (!s.coordinates || !candidate.coordinates) return s.name.toLowerCase() === candidate.name.toLowerCase();
-          return s.name.toLowerCase() === candidate.name.toLowerCase() ||
-          (Math.abs(s.coordinates[0] - candidate.coordinates[0]) < 0.0001 && 
-           Math.abs(s.coordinates[1] - candidate.coordinates[1]) < 0.0001);
-        });
-        const inCandidates = candidateSubstations.some(s => {
-          if (!s.coordinates || !candidate.coordinates) return s.name.toLowerCase() === candidate.name.toLowerCase();
-          return s.name.toLowerCase() === candidate.name.toLowerCase() ||
-          (Math.abs(s.coordinates[0] - candidate.coordinates[0]) < 0.0001 && 
-           Math.abs(s.coordinates[1] - candidate.coordinates[1]) < 0.0001);
-        });
-        return !inMain && !inCandidates;
-      });
-
-      setCandidateSubstations(prev => [...prev, ...filteredCandidates]);
-      
-      if (filteredCandidates.length === 0) {
-        addNotification("No new substations discovered in this immediate area.", 'info');
-      } else {
-        addNotification(`Discovered ${filteredCandidates.length} new substations.`, 'success');
-      }
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') return;
-      console.error("Discovery failed:", error);
-      addNotification("Substation discovery failed. Please try again.", 'error');
-    } finally {
-      if (!discoveryAbortControllerRef.current || discoveryAbortControllerRef.current === controller) {
-        setIsDiscovering(false);
-        discoveryAbortControllerRef.current = null;
-      }
-    }
-  }, [substations, addNotification]);
+  const handleDiscoverLandStub = () => {}; // Removed old large handler
+  const handleDiscoverNearbyStub = () => {}; // Removed old large handler
 
   const handleAddCandidate = useCallback((candidate: Substation) => {
     const newSub: Substation = {
@@ -530,85 +284,9 @@ export default function App() {
     addNotification("Infrastructure discovery discarded.", 'info');
   }, [setCandidateSubstations, selectedSubstation, addNotification]);
 
-  const handleImport = useCallback(async () => {
-    if (!importValue) return;
-    
-    // Extract listing number from URL or validate as numeric
-    let finalListingNumber = importValue.trim();
-    const isP24 = finalListingNumber.includes('property24.com');
-    const isPrivateProp = finalListingNumber.includes('privateproperty.co.za');
-
-    if (isP24 || isPrivateProp) {
-      // Remove query parameters
-      const urlWithoutQuery = finalListingNumber.split('?')[0];
-      // Split by / and filter out empty strings (trailing slashes)
-      const parts = urlWithoutQuery.split('/').filter(p => p.length > 0);
-      finalListingNumber = parts[parts.length - 1];
-    }
-
-    if (!/^\d{5,15}$/.test(finalListingNumber)) {
-      alert("Invalid format. Please enter a Property24/Private Property URL or a numeric listing number.");
-      return;
-    }
-
-    const controller = new AbortController();
-    importAbortControllerRef.current = controller;
-
-    setIsImporting(true);
-    try {
-      const property = await importPropertyListing(importValue);
-      
-      console.log("Property Import Raw Result:", property);
-      
-      if (controller.signal.aborted) return;
-      if (!property) throw new Error("AI failed to extract property details.");
-      
-      const newProperty = { ...property };
-      
-      // Coordinate integrity check and auto-correction for South Africa
-      if (newProperty.coordinates && Array.isArray(newProperty.coordinates) && newProperty.coordinates.length >= 2) {
-        let [lat, lng] = newProperty.coordinates;
-        
-        // Flip if swapped
-        if (lat > 0 && lng < 0) {
-          [lat, lng] = [lng, lat];
-        }
-        // Force negative lat for SA if model returned positive
-        else if (lat > 0 && lat < 40 && lng > 0) {
-          lat = -lat;
-        }
-        
-        newProperty.coordinates = [lat, lng];
-      }
-      
-      newProperty.id = Math.random().toString(36).substr(2, 9);
-      newProperty.listingNumber = finalListingNumber;
-      
-      // Preserve the original URL if possible, or construct a Property24 one only as fallback for P24-only inputs
-      if (!newProperty.p24Url) {
-        if (importValue.includes('privateproperty.co.za')) {
-          newProperty.p24Url = importValue;
-        } else {
-          const suburbSlug = newProperty.address.suburb.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-          const citySlug = newProperty.address.city.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-          const provinceSlug = (newProperty.address as any).province?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'gauteng';
-          newProperty.p24Url = `https://www.property24.com/for-sale/${suburbSlug}/${citySlug}/${provinceSlug}/${finalListingNumber}`;
-        }
-      }
-      
-      setPendingProperty(newProperty);
-      setIsImportModalOpen(false);
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') return;
-      console.error("Import failed:", error);
-      addNotification(`AI import failed: ${error instanceof Error ? error.message : 'Unknown error'}. Please check your API key and URL.`, 'error');
-    } finally {
-      if (!importAbortControllerRef.current || importAbortControllerRef.current === controller) {
-        setIsImporting(false);
-        importAbortControllerRef.current = null;
-      }
-    }
-  }, [importValue]);
+  const handleImport = async () => {
+    await handleImportProperty(importValue);
+  };
 
   const confirmAddProperty = useCallback(() => {
     if (pendingProperty) {
@@ -640,64 +318,6 @@ export default function App() {
     }
   }, [setSubstations, selectedSubstation]);
 
-  const handleAddSubstation = useCallback(async (data: { type: 'address' | 'url' | 'coords' | 'direct', value: string, payload?: Substation | Substation[] }) => {
-    const controller = new AbortController();
-    importAbortControllerRef.current = controller;
-
-    setIsImporting(true);
-    try {
-      let candidateSub: Substation | null = null;
-      let multipleSubs: Substation[] | null = null;
-
-      if (data.type === 'direct' && data.payload) {
-        if (Array.isArray(data.payload)) {
-          multipleSubs = data.payload;
-        } else {
-          candidateSub = { ...data.payload as Substation };
-          candidateSub.id = Math.random().toString(36).substr(2, 9);
-        }
-      } else {
-        const result = await searchSubstationDetails(data.type, data.value);
-
-        if (controller.signal.aborted) return;
-        if (!result) throw new Error("AI failed to extract substation details.");
-        
-        candidateSub = result;
-
-        // Coordinate integrity check
-        if (!candidateSub.coordinates || !Array.isArray(candidateSub.coordinates) || candidateSub.coordinates.length < 2 || isNaN(candidateSub.coordinates[0]) || isNaN(candidateSub.coordinates[1])) {
-          candidateSub.coordinates = [-26.1311, 28.0536];
-        } else {
-          let [lat, lng] = candidateSub.coordinates;
-          if (lat > 0 && lng < 0) {
-            candidateSub.coordinates = [lng, lat];
-          }
-        }
-
-        candidateSub.id = Math.random().toString(36).substr(2, 9);
-      }
-
-      if (controller.signal.aborted) return;
-
-      if (multipleSubs) {
-        setSubstations(prev => [...multipleSubs!, ...prev]);
-        setIsSubstationModalOpen(false);
-      } else if (candidateSub) {
-        setPendingSubstation(candidateSub);
-        setIsSubstationModalOpen(false);
-      }
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') return;
-      console.error("Substation add failed:", error);
-      const errorMessage = error instanceof Error ? error.message : "AI extraction failed. Please check your search term and try again.";
-      addNotification(`Substation lookup failed: ${errorMessage}`, 'error');
-    } finally {
-      if (!importAbortControllerRef.current || importAbortControllerRef.current === controller) {
-        setIsImporting(false);
-        importAbortControllerRef.current = null;
-      }
-    }
-  }, [setSubstations]);
 
   const confirmAddSubstation = useCallback(() => {
     if (pendingSubstation) {
@@ -1075,15 +695,15 @@ export default function App() {
                        <ExternalLink className="w-5 h-5 text-slate-400" />
                     </div>
                     <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                      Enter the Property24 / Private Property URL or Listing Number. Our system will analyze the baseline and extract regional spatial data.
+                      Enter the Property24 URL or Listing Number. Our system will analyze the baseline and extract regional spatial data.
                     </p>
                  </div>
 
                  <div>
-                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">P24 / PP Link or Reference</label>
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">P24 Link or Reference</label>
                     <input 
                       type="text" 
-                      placeholder="Paste URL or listing number..."
+                      placeholder="Paste Property24 URL or listing number..."
                       className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-600 focus:bg-white rounded-xl px-5 py-4 text-sm font-semibold outline-none transition-all placeholder:text-slate-300"
                       value={importValue}
                       onChange={(e) => setImportValue(e.target.value)}
@@ -1517,7 +1137,7 @@ export default function App() {
             </div>
             <span className="text-[11px] font-black uppercase tracking-widest leading-none">{n.message}</span>
             <button 
-              onClick={() => setNotifications(prev => prev.filter(item => item.id !== n.id))}
+              onClick={() => removeNotification(n.id)}
               className="ml-4 p-1 hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"
             >
               <X className="w-4 h-4" />

@@ -1131,17 +1131,17 @@ export default function MapComponent({
         />
 
         {selectedSubstation && isDiscoveringLand && (
-          <Circle
-            center={selectedSubstation.coordinates}
-            radius={3000}
-            pathOptions={{
-              color: '#10b981', // emerald-500
-              fillColor: '#10b981',
-              fillOpacity: 0.1,
+          <Circle 
+            center={selectedSubstation.coordinates} 
+            radius={1000} 
+            pathOptions={{ 
+              color: '#10b981', 
+              fillColor: '#10b981', 
+              fillOpacity: 0.1, 
               dashArray: '10, 10',
               weight: 2,
               className: 'animate-pulse'
-            }}
+            }} 
           />
         )}
 
@@ -1197,19 +1197,6 @@ export default function MapComponent({
           </>
         )}
 
-        {selectedSubstation && isDiscoveringLand && (
-          <Circle 
-            center={selectedSubstation.coordinates} 
-            radius={1000} 
-            pathOptions={{ 
-              color: '#10b981', 
-              fillColor: '#10b981', 
-              fillOpacity: 0.1, 
-              dashArray: '10, 10',
-              weight: 2 
-            }} 
-          />
-        )}
         <DistanceLines propertyDistances={propertyDistances} rulerActive={rulerActive} />
 
         <MapEvents />
