@@ -21,3 +21,7 @@ This file tracks the production-ready state of PropScope and any integration req
   - Added "Expansion" view for Spatial Catalog.
   - Enforced "Vacant Land Only" filtering in Gemini probes.
   - Resolved "Set map center and zoom first" Leaflet race conditions.
+  - Refined `/api/fetch-listing` proxy to handle upstream 500/403 errors gracefully and updated headers to bypass basic scraper detection.
+  - Enhanced substation modals (Edit, Review, and Map Overlay) with explicit GPS coordinates and Google Maps deep-links.
+  - Enforced strict Property24 and Private Property URL retrieval in AI search and extraction logic.
+  - Dynamically updated UI labels in modals and evaluation dashboards to reflect the specific listing source (Property24 vs Private Property).

@@ -1204,7 +1204,7 @@ export default function App() {
                       referrerPolicy="no-referrer"
                       className="text-[10px] font-black text-blue-600 hover:underline flex items-center gap-1.5 px-3 py-1 bg-blue-50 rounded-lg transition-colors"
                     >
-                      View on Property24
+                      View on {pendingProperty.p24Url.includes('privateproperty') ? 'Private Property' : 'Property24'}
                       <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>
@@ -1283,7 +1283,10 @@ export default function App() {
                 <div className="flex justify-between items-start mb-4">
                   <div className="min-w-0 pr-4">
                     <h4 className="font-bold text-slate-900 text-lg truncate">{pendingSubstation.name}</h4>
-                    <p className="text-xs text-slate-500 font-medium truncate">{pendingSubstation.address}</p>
+                    <p className="text-xs text-slate-500 font-medium truncate mb-1">{pendingSubstation.address}</p>
+                    <div className="font-mono text-[9px] text-slate-400">
+                      GPS: {pendingSubstation.coordinates ? `${pendingSubstation.coordinates[0].toFixed(6)}, ${pendingSubstation.coordinates[1].toFixed(6)}` : 'Unknown'}
+                    </div>
                   </div>
                   <div className="shrink-0 flex flex-col items-end gap-1">
                     <span className="px-2.5 py-1 bg-amber-100 text-amber-700 rounded-lg text-[10px] font-bold uppercase tracking-wider">

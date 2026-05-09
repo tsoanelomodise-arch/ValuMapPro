@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { X, Zap } from 'lucide-react';
+import { X, Zap, ExternalLink } from 'lucide-react';
 import { Substation } from '../../types';
 
 interface SubstationEditModalProps {
@@ -109,6 +109,44 @@ export default function SubstationEditModal({
                   />
                 </div>
               </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block">Geospatial Coordinates</label>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <input
+                      type="number"
+                      step="any"
+                      value={formData.coordinates[0]}
+                      onChange={(e) => setFormData(prev => ({ ...prev, coordinates: [Number(e.target.value), prev.coordinates[1]] }))}
+                      className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-600 focus:bg-white rounded-xl px-4 py-3 text-xs font-mono font-bold transition-all outline-none"
+                      placeholder="Latitude"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <input
+                      type="number"
+                      step="any"
+                      value={formData.coordinates[1]}
+                      onChange={(e) => setFormData(prev => ({ ...prev, coordinates: [prev.coordinates[0], Number(e.target.value)] }))}
+                      className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-600 focus:bg-white rounded-xl px-4 py-3 text-xs font-mono font-bold transition-all outline-none"
+                      placeholder="Longitude"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {formData.googleMapsUrl && (
+                <a 
+                  href={formData.googleMapsUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-4 py-3 bg-indigo-50 border border-indigo-100 rounded-xl text-[10px] font-bold text-indigo-600 hover:bg-indigo-100 transition-all uppercase tracking-widest"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  View on Google Maps
+                </a>
+              )}
 
               <div className="p-5 bg-indigo-50 border border-indigo-100 rounded-2xl flex justify-between items-center group transition-all hover:bg-indigo-100/50">
                  <div>

@@ -69,7 +69,7 @@ export default function MapDetailsOverlay({
                     onClick={(e) => e.stopPropagation()}
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
-                    View Property24 Listing
+                    View {property.p24Url.includes('privateproperty') ? 'Private Property' : 'Property24'} Listing
                   </a>
                 </div>
               )}
@@ -113,19 +113,19 @@ export default function MapDetailsOverlay({
                       </div>
                     </div>
                   )}
-                  {property.listingNumber && (
+                  {(property.listingNumber || property.p24Url) && (
                     <div className="flex items-start gap-2.5 text-[11px]">
                       <div className="mt-1 w-1 h-1 rounded-full bg-slate-400 shrink-0" />
                       <div className="flex flex-wrap gap-x-2 gap-y-0.5">
-                        <span className="font-bold text-slate-500 uppercase tracking-tighter text-[9px]">P24 Ref:</span>
+                        <span className="font-bold text-slate-500 uppercase tracking-tighter text-[9px]">Ref No:</span>
                         <a 
-                          href={property.p24Url || `https://www.property24.com/for-sale/${property.address.suburb.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${property.address.city.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${property.listingNumber}`}
+                          href={property.p24Url || (property.listingNumber ? `https://www.property24.com/for-sale/${property.address.suburb.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${property.address.city.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${property.listingNumber}` : '#')}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-slate-900 font-bold hover:text-blue-600 hover:underline cursor-pointer flex items-center gap-1"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          {property.listingNumber}
+                          {property.listingNumber || 'Direct Link'}
                           <ExternalLink className="w-2.5 h-2.5" />
                         </a>
                       </div>
@@ -188,7 +188,23 @@ export default function MapDetailsOverlay({
           </div>
           <div className="p-5">
             <h3 className="font-black text-slate-900 truncate leading-tight uppercase italic">{substation.name}</h3>
-            <p className="text-[10px] text-slate-500 mt-1 mb-4 truncate">{substation.address}</p>
+            <p className="text-[10px] text-slate-500 mt-1 mb-2 truncate">{substation.address}</p>
+            
+            <div className="flex flex-col gap-1 mb-4">
+              <div className="font-mono text-[9px] text-slate-400">
+                GPS: {substation.coordinates && Array.isArray(substation.coordinates) ? `${substation.coordinates[0].toFixed(6)}, ${substation.coordinates[1].toFixed(6)}` : 'Unknown'}
+              </div>
+              {substation.googleMapsUrl && (
+                <a 
+                  href={substation.googleMapsUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-[9px] font-bold text-blue-600 hover:underline flex items-center gap-1"
+                >
+                  View on Google Maps <ExternalLink className="w-2.5 h-2.5" />
+                </a>
+              )}
+            </div>
             
             <div className="space-y-2 mb-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
               <div className="flex justify-between items-center text-[9px] font-bold">

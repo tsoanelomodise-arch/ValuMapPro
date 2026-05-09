@@ -170,7 +170,7 @@ export default function EvaluationDashboard({
                         rel="noopener noreferrer"
                         className="text-[10px] font-bold text-slate-400 hover:text-blue-600 transition-colors uppercase tracking-widest flex items-center gap-1"
                       >
-                        P24 <ExternalLink className="w-2.5 h-2.5" />
+                        {p24Url.includes('privateproperty') ? 'Private' : 'P24'} <ExternalLink className="w-2.5 h-2.5" />
                       </a>
                     )}
 
@@ -283,9 +283,9 @@ export default function EvaluationDashboard({
                        />
                     </div>
                  ) : (
-                    item.isP24 && listingNumber ? (
+                    item.isP24 && (listingNumber || p24Url) ? (
                       <a 
-                        href={p24Url || `https://www.property24.com/for-sale/${address.suburb.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${address.city.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${(address as any).province?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'gauteng'}/${listingNumber}`}
+                        href={p24Url || (listingNumber ? `https://www.property24.com/for-sale/${address.suburb.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${address.city.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${(address as any).province?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'gauteng'}/${listingNumber}` : '#')}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-lg font-bold text-blue-600 hover:underline flex items-center gap-1.5"

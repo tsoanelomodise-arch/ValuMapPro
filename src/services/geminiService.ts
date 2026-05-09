@@ -175,7 +175,9 @@ export async function searchVacantLandByArea(north: number, south: number, east:
       
       CRITICAL: ONLY return vacant land, plots, or agricultural farms. EXCLUDE residential houses, apartments, office buildings, or developed retail space.
       
-      Look for listings on Property24 (property24.com) and Private Property (privateproperty.co.za).`,
+      Look for listings ONLY on Property24 (property24.com) and Private Property (privateproperty.co.za).
+      
+      STRICT URL REQUIREMENT: You MUST provide the full, direct URL to each listing in the 'p24Url' field. Do not make up URLs. If you cannot find a direct link to the listing on Property24 or Private Property, exclude that result.`,
       config: {
         responseMimeType: "application/json",
         tools: [{ googleSearch: {} }],
@@ -190,7 +192,10 @@ export async function searchVacantLandByArea(north: number, south: number, east:
                   name: { type: Type.STRING },
                   type: { type: Type.STRING, enum: ['Vacant Land', 'Agricultural'] },
                   description: { type: Type.STRING },
-                  p24Url: { type: Type.STRING },
+                  p24Url: { 
+                    type: Type.STRING,
+                    description: "Full DIRECT URL to the listing on Property24 or Private Property"
+                  },
                   address: {
                     type: Type.OBJECT,
                     properties: {
@@ -262,7 +267,9 @@ export async function findLandListingLinks(north: number, south: number, east: n
       contents: `Search for actual VACANT LAND, UNIMPROVED PLOT, or FARM listings for sale in South Africa near this area:
       Latitude ${north} to ${south}, Longitude ${west} to ${east}.${substationContext}
       
-      Focus on Property24 (property24.com) and Private Property.
+      Focus ONLY on direct listings from Property24 (property24.com) and Private Property (privateproperty.co.za).
+      
+      STRICT URL REQUIREMENT: Return only valid, direct URLs to the property detail pages. Do not return search results pages or homepage links.
       
       CRITICAL: EXCLUDE all residential houses, townhouses, apartments, and developed commercial properties. We only want undeveloped land or farms.
       
@@ -349,10 +356,12 @@ export async function importPropertyListing(input: string): Promise<Property | n
       Extract to JSON: name, type, description, p24Url, agent(Listing Agent name), agentPhone, address(street, suburb, city, province, country), coordinates[lat, lng], specs(standSize, titleType), financials(price, marketValue).
       
       STRICT REQUIREMENT: This tool is ONLY for VACANT LAND, PLOTS, and FARMS. 
+      The 'p24Url' field MUST contain the full direct URL to the listing on Property24 or Private Property.
+      
       If the property is a residential house (with bedrooms/bathrooms mentioned as a primary feature), apartment, or office block, DO NOT label it as 'Residential'. 
       We prefer everything to be classified as either 'Vacant Land' (unimproved) or 'Agricultural' (farms).
       
-      If it's a Property24 listing, find the specific coordinates for that address. COORDINATES ARE OPTIONAL: If the address is obfuscated or coordinates are hard to find, focus on name/price/agent and leave coordinates as null.`,
+      If it's a Property24 or Private Property listing, find the specific coordinates for that address if possible. COORDINATES ARE OPTIONAL: If the address is obfuscated or coordinates are hard to find, focus on name/price/agent and leave coordinates as null.`,
       config: {
         responseMimeType: "application/json",
         tools: tools,
