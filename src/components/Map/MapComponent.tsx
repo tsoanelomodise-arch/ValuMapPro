@@ -62,9 +62,18 @@ function EsriLayer({
   useEffect(() => {
     if (!visible) {
       if (layerRef.current) {
-        map.removeLayer(layerRef.current);
+        try {
+          map.removeLayer(layerRef.current);
+        } catch (e) {}
         layerRef.current = null;
       }
+      return;
+    }
+
+    // Safety check: ensure map has a center before adding Esri layers
+    try {
+      map.getCenter();
+    } catch (e) {
       return;
     }
 
@@ -387,18 +396,27 @@ function MapController({ center, rulerActive }: { center: [number, number] | nul
   const lastCenterRef = React.useRef<[number, number] | null>(null);
   
   useEffect(() => {
-    if (center && !rulerActive && !isNaN(center[0]) && !isNaN(center[1])) {
-      // Only fly if the center actually changed significantly
-      if (!lastCenterRef.current || 
-          Math.abs(lastCenterRef.current[0] - center[0]) > 0.00001 || 
-          Math.abs(lastCenterRef.current[1] - center[1]) > 0.00001) {
-        
-        map.flyTo(center, map.getZoom(), {
-          duration: 1.2,
-          easeLinearity: 0.25
-        });
-        lastCenterRef.current = center;
-      }
+    if (!center || rulerActive || isNaN(center[0]) || isNaN(center[1])) return;
+
+    // Check if the map has been initialized with a view yet to avoid Leaflet error
+    try {
+      map.getCenter();
+      map.getZoom();
+    } catch (e) {
+      // Map view not set yet, don't flyTo
+      return;
+    }
+    
+    // Only fly if the center actually changed significantly
+    if (!lastCenterRef.current || 
+        Math.abs(lastCenterRef.current[0] - center[0]) > 0.00001 || 
+        Math.abs(lastCenterRef.current[1] - center[1]) > 0.00001) {
+      
+      map.flyTo(center, map.getZoom(), {
+        duration: 1.2,
+        easeLinearity: 0.25
+      });
+      lastCenterRef.current = center;
     }
   }, [center, map, rulerActive]);
   
@@ -624,21 +642,30 @@ export default function MapComponent({
     return null;
   }
 
+  // Helper to validate coordinates
+  const isValidCoord = (c: any): c is [number, number] => 
+    Array.isArray(c) && c.length >= 2 && typeof c[0] === 'number' && typeof c[1] === 'number' && !isNaN(c[0]) && !isNaN(c[1]);
+
   // Determine stable coordinates for map centering
   const targetCenter = React.useMemo(() => {
-    if (selectedProperty && Array.isArray(selectedProperty.coordinates) && !isNaN(selectedProperty.coordinates[0])) {
-      return selectedProperty.coordinates as [number, number];
+    if (selectedProperty && isValidCoord(selectedProperty.coordinates)) {
+      return selectedProperty.coordinates;
     }
-    if (selectedSubstation && Array.isArray(selectedSubstation.coordinates) && !isNaN(selectedSubstation.coordinates[0])) {
-      return selectedSubstation.coordinates as [number, number];
+    if (selectedSubstation && isValidCoord(selectedSubstation.coordinates)) {
+      return selectedSubstation.coordinates;
     }
     return null;
   }, [selectedProperty, selectedSubstation]);
 
   // Initial center should only be computed once to prevent jumping on data updates
   const [initialCenter] = useState<[number, number]>(() => {
-    if (selectedProperty) return selectedProperty.coordinates as [number, number];
-    if (properties.length > 0 && properties[0].coordinates) return properties[0].coordinates as [number, number];
+    if (selectedProperty && isValidCoord(selectedProperty.coordinates)) return selectedProperty.coordinates;
+    
+    // Look for the first valid property coordinate
+    const firstValidProp = properties.find(p => isValidCoord(p.coordinates));
+    if (firstValidProp) return firstValidProp.coordinates;
+
+    // Use a default for South Africa (Johannesburg area)
     return [-26.1311, 28.0536];
   });
 
