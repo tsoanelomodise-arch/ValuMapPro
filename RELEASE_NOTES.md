@@ -1,10 +1,12 @@
 # Release Notes
 
-- **v1.0 (2026-05-09)**: Initial System Lockdown. 
-  - Fixed Leaflet "center/zoom" initialization racing errors.
-  - Restricted AI Discovery tools to Vacant Land, Plots, and Farms.
-  - Implemented Wide/Narrow toggle for Spatial Catalog.
-  - Added coordinate validation safeguards.
+- **v1.1 (2026-05-09)**: Google Maps Platform Integration.
+  - Replaced Leaflet with `@vis.gl/react-google-maps` for superior spatial accuracy and Google Earth imagery.
+  - Implemented Advanced Marker components for properties and substations with embedded status labels.
+  - Enhanced AI grounding prompts to explicitly cross-reference Google Earth and Google Maps satellite data.
+  - Added dedicated "Earth View" basemaps and a deep-link to Google Earth Web for every substation.
+  - Optimized map export functionality for Google Maps canvas rendering.
+  - Fixed coordinate validation and discovery bounds for 1km proximity accuracy.
 
 - **v1.1 (2026-05-09)**: AI Infrastructure Hardening.
   - Upgraded server-side AI to `@google/generative-ai` for improved reliability.
@@ -42,7 +44,7 @@
 - **v1.8 (2026-05-10)**: System Stability & Core Refactor.
   - Core Refactoring: Performed major architectural cleanup of `App.tsx` by extracting several features into custom hooks (`useDiscovery`, `useImport`, `useNotifications`).
   - AI Service Optimization: Standardized all AI requests through a unified `generateAIContent` helper, reducing code repetition and improving error handling.
-  - Search Hardening: Enforced strict `property24.com` filtering across all discovery and textual search tools. Explicitly excluded `property24.co.ke` (Kenya) to maintain South African regional focus.
+  - Search Hardening: Enforced strict `property24.com` filtering across all discovery and textual search tools. Explicitly excluded `property24.co.ke` (Kenya) via code-level filters and updated prompts to maintain South African regional focus.
   - Availability Guard: Implemented automatic detection and exclusion of Property24 listings that are no longer available.
   - Spatial Precision: Strictly reduced land discovery focus to a 1km visual and algorithmic radius from selected substations.
   - Substation Discovery Hardening: Implemented strict coordinate validation and bounding-box filtering for substation discovery to prevent "off-map" placements.

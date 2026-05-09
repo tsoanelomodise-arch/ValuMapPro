@@ -11,7 +11,7 @@ interface MapDetailsOverlayProps {
   onCloseProperty: () => void;
   onCloseSubstation: () => void;
   onOpenDetails: (property: Property) => void;
-  onDiscoverLand?: (substation: Substation) => void;
+  onDiscoverLand?: (bounds: { north: number, south: number, east: number, west: number }) => void;
   isDiscoveringLand?: boolean;
   'data-html2canvas-ignore'?: string;
 }
@@ -234,7 +234,16 @@ export default function MapDetailsOverlay({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onDiscoverLand?.(substation);
+                if (substation) {
+                  const [lat, lng] = substation.coordinates;
+                  const offset = 0.01; // ~1.1km
+                  onDiscoverLand?.({
+                    north: lat + offset,
+                    south: lat - offset,
+                    east: lng + offset,
+                    west: lng - offset
+                  });
+                }
               }}
               disabled={isDiscoveringLand}
               className={cn(

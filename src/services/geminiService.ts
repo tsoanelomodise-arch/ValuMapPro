@@ -70,11 +70,13 @@ function extractJson(text: string): string {
 export async function searchSubstations(area: string): Promise<AISubstation[]> {
   const data = await generateAIContent<{ substations: AISubstation[] }>({
     model: MODEL_NAME,
-    contents: [{ role: 'user', parts: [{ text: `Find 8-12 actual Eskom or Municipal electrical substations in or near "${area}", South Africa.
-      Search for primary distribution substations and infrastructure records for this specific region.
+    contents: [{ role: 'user', parts: [{ text: `Search for real Eskom or Municipal electrical substations in or near "${area}", South Africa.
+      
+      CROSS-REFERENCE REQUIREMENT:
+      Use Google Search to cross-reference with Google Maps satellite imagery and Google Earth infrastructure data to ensure these substations exist and have precise coordinates.
       
       CRITICAL:
-      1. Coordinates MUST be precise and in [lat, lng] format.
+      1. Coordinates MUST be precise [lat, lng] verified against Google Maps.
       2. Verify the substation actually belongs to "${area}".
       3. Names must be real (e.g., "Bryant Substation", "Ekurhuleni North").
       
@@ -113,14 +115,17 @@ export async function searchSubstations(area: string): Promise<AISubstation[]> {
 export async function searchSubstationsByArea(north: number, south: number, east: number, west: number): Promise<AISubstation[]> {
   const data = await generateAIContent<{ substations: AISubstation[] }>({
     model: MODEL_NAME,
-    contents: [{ role: 'user', parts: [{ text: `Find 10-15 actual Eskom or Municipal electrical substations in South Africa strictly within this geographic bounding box:
+    contents: [{ role: 'user', parts: [{ text: `Find actual Eskom or Municipal electrical substations in South Africa strictly within this geographic bounding box:
       Latitude Range: ${south} to ${north} (South of Equator)
       Longitude Range: ${west} to ${east} (East of Prime Meridian)
       
+      CROSS-REFERENCE REQUIREMENT:
+      Use Google Search to cross-reference with Google Maps satellite imagery and Google Earth infrastructure data to ensure these substations exist and have precise coordinates.
+      
       CRITICAL INSTRUCTION:
       1. ONLY return substations that physically exist within THESE bounds. 
-      2. Coordinates MUST be in [lat, lng] format. Example: [-26.123, 28.456]
-      3. Verify names and locations using Google Search.
+      2. Coordinates MUST be precise [lat, lng] verified against Google Maps.
+      3. Verify names and locations using infrastructure records.
       4. DO NOT return substations from other provinces or cities if they are outside this box.
       
       Return JSON: name, owner, address, coordinates [lat, lng], voltageKV, mvaCapacity, description.` }]}],
@@ -158,8 +163,11 @@ export async function searchSubstationsByArea(north: number, south: number, east
 export async function searchVacantLandByArea(north: number, south: number, east: number, west: number): Promise<Property[]> {
   const data = await generateAIContent<{ properties: Property[] }>({
     model: MODEL_NAME,
-    contents: [{ role: 'user', parts: [{ text: `Search for 5 actually available VACANT LAND, UNIMPROVED PLOT, or FARM listings for sale in South Africa using:
+    contents: [{ role: 'user', parts: [{ text: `Search for VACANT LAND, UNIMPROVED PLOT, or FARM listings for sale in South Africa using:
          site:property24.com
+         
+         GEOGRAPHIC ACCURACY:
+         Cross-reference listing locations with Google Maps satellite views and Google Earth topography to ensure coordinates [lat, lng] are accurately centered on the land parcel.
          
          CRITICAL: ONLY use property24.com (South Africa). 
          DO NOT search or return anything from property24.co.ke (Kenya).
@@ -168,7 +176,7 @@ export async function searchVacantLandByArea(north: number, south: number, east:
          
          STRICT REQUIREMENTS:
          1. ONLY vacant land/plots/farms.
-         2. EVERY listing MUST have coordinates [lat, lng].
+         2. EVERY listing MUST have precise [lat, lng].
          3. ONLY include listings that are ACTIVE and AVAILABLE. Exclude anything marked "no longer available".` }]}],
     tools: [{ googleSearch: {} }],
     config: {
@@ -207,7 +215,11 @@ export async function searchVacantLandByArea(north: number, south: number, east:
     }
   });
 
-  return data?.properties || [];
+  return (data?.properties || []).filter(p => 
+    p.p24Url && 
+    p.p24Url.includes('property24.com') && 
+    !p.p24Url.includes('property24.co.ke')
+  );
 }
 
 export async function findLandListingLinks(north: number, south: number, east: number, west: number, anchorSubstation?: Substation): Promise<string[]> {
@@ -247,7 +259,10 @@ export async function findLandListingLinks(north: number, south: number, east: n
     }
   });
 
-  return data?.links || [];
+  return (data?.links || []).filter(link => 
+    link.includes('property24.com') && 
+    !link.includes('property24.co.ke')
+  );
 }
 
 export async function importPropertyListing(input: string): Promise<Property | null> {
@@ -412,7 +427,11 @@ export async function searchVacantLandByLocationName(location: string): Promise<
     }
   });
 
-  return data?.properties || [];
+  return (data?.properties || []).filter(p => 
+    p.p24Url && 
+    p.p24Url.includes('property24.com') && 
+    !p.p24Url.includes('property24.co.ke')
+  );
 }
 
 export async function geocodeLocation(location: string): Promise<{ name: string, coordinates: [number, number], type?: string } | null> {

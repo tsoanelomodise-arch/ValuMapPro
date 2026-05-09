@@ -1,7 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMapEvents, useMap, LayersControl, LayerGroup } from 'react-leaflet';
-import L from 'leaflet';
-import * as esri from 'esri-leaflet';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { 
+  Map, 
+  AdvancedMarker, 
+  InfoWindow, 
+  useMap, 
+  useMapsLibrary,
+  useAdvancedMarkerRef,
+  ControlPosition,
+  MapControl
+} from '@vis.gl/react-google-maps';
 import { Property, Substation, PROPERTY_TYPE_COLORS, SUBSTATION_COLOR } from '../../types';
 import { 
   Ruler, 
@@ -21,137 +28,21 @@ import {
   Settings2,
   ListFilter,
   Eye,
-  EyeOff
+  EyeOff,
+  Globe,
+  Compass,
+  Search
 } from 'lucide-react';
 import { cn, calculateDistance } from '../../lib/utils';
 import MapDetailsOverlay from './MapDetailsOverlay';
 import ExportSelectionOverlay from './ExportSelectionOverlay';
+import { Polyline } from './Polyline';
+import { Circle } from './Circle';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
 const CLASSIC_RED = '#EA4335';
-
-const ESRI_BASEMAPS = [
-  { id: 'streets', name: 'Streets', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', attribution: '&copy; Esri' },
-  { id: 'satellite', name: 'Satellite', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attribution: '&copy; Esri' },
-  { id: 'topo', name: 'Topographic', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', attribution: '&copy; Esri' },
-  { id: 'gray', name: 'Light Gray', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', attribution: '&copy; Esri' },
-  { id: 'dark-gray', name: 'Dark Gray', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', attribution: '&copy; Esri' },
-  { id: 'natgeo', name: 'National Geographic', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}', attribution: '&copy; Esri' },
-];
-
-// Custom component to integrate esri-leaflet with react-leaflet
-function EsriLayer({ 
-  url, 
-  type = 'dynamic', 
-  layers, 
-  opacity, 
-  visible,
-  name
-}: { 
-  url: string, 
-  type?: 'dynamic' | 'tiled' | 'feature',
-  layers?: number[], 
-  opacity: number, 
-  visible: boolean,
-  name?: string
-}) {
-  const map = useMap();
-  const layerRef = React.useRef<any>(null);
-
-  useEffect(() => {
-    if (!visible) {
-      if (layerRef.current) {
-        try {
-          map.removeLayer(layerRef.current);
-        } catch (e) {}
-        layerRef.current = null;
-      }
-      return;
-    }
-
-    // Safety check: ensure map has a center before adding Esri layers
-    try {
-      map.getCenter();
-    } catch (e) {
-      return;
-    }
-
-    if (!layerRef.current) {
-      const options: any = {
-        url,
-        opacity,
-        useCors: true,
-        zIndex: type === 'tiled' ? 200 : 400,
-        format: 'png32'
-      };
-      
-      if (layers && layers.length > 0 && type === 'dynamic') {
-        options.layers = layers;
-      }
-      
-      try {
-        if (type === 'tiled') {
-          layerRef.current = esri.tiledMapLayer(options);
-        } else if (type === 'feature') {
-          layerRef.current = esri.featureLayer({
-            ...options,
-            style: () => ({
-              color: '#4f46e5',
-              weight: 1,
-              opacity: 0.5,
-              fillOpacity: 0.2
-            })
-          });
-        } else {
-          layerRef.current = esri.dynamicMapLayer(options);
-        }
-        
-        layerRef.current.on('loading', () => console.log(`${name || 'Esri'} Layer loading...`));
-        layerRef.current.on('load', () => console.log(`${name || 'Esri'} Layer loaded successfully`));
-        layerRef.current.on('error', (err: any) => {
-          console.error(`${name || 'Esri'} Layer error:`, err?.message || 'Unknown error');
-        });
-        
-        layerRef.current.addTo(map);
-      } catch (err) {
-        console.error(`Failed to create ${type} layer:`, err);
-      }
-    } else {
-      if (layerRef.current.setOpacity) {
-        layerRef.current.setOpacity(opacity);
-      }
-      if (layers && type === 'dynamic' && layerRef.current.setLayers) {
-        layerRef.current.setLayers(layers);
-      }
-    }
-
-    return () => {
-      if (layerRef.current && map) {
-        try {
-          map.removeLayer(layerRef.current);
-        } catch (e) {
-          console.warn('Failed to remove layer during cleanup:', e);
-        }
-        layerRef.current = null;
-      }
-    };
-  }, [map, url, layers, opacity, visible, type, name]);
-
-  return null;
-}
-
-// Fix Leaflet marker icons using CDN URLs
-const iconUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
-const iconShadowUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
-
-let DefaultIcon = L.icon({
-  iconUrl: iconUrl,
-  shadowUrl: iconShadowUrl,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
-L.Marker.prototype.options.icon = DefaultIcon;
+const ATTRIBUTION = 'gmp_mcp_codeassist_v1_aistudio';
 
 interface MapComponentProps {
   properties: Property[];
@@ -180,1402 +71,654 @@ interface MapComponentProps {
   mapCenterOverride?: [number, number] | null;
 }
 
-// Memoized Distance Lines for performance and stability
-const DistanceLines = React.memo(({ propertyDistances, rulerActive }: { propertyDistances: any[], rulerActive: boolean }) => {
-  if (rulerActive) return null;
-  
-  const validDistances = propertyDistances.filter(({ property, substation }) => 
-    Array.isArray(property.coordinates) && property.coordinates.length >= 2 && 
-    Array.isArray(substation.coordinates) && substation.coordinates.length >= 2 &&
-    !isNaN(property.coordinates[0]) && !isNaN(substation.coordinates[0])
-  );
+// Substation Marker Component
+interface SubstationMarkerProps {
+  key?: string;
+  substation: Substation;
+  isSelected: boolean;
+  onSelect?: (s: Substation) => void;
+}
+
+const SubstationMarker = ({ 
+  substation, 
+  isSelected, 
+  onSelect 
+}: SubstationMarkerProps) => {
+  const [markerRef, marker] = useAdvancedMarkerRef();
+  const [infoWindowOpen, setInfoWindowOpen] = useState(false);
 
   return (
     <>
-      {validDistances.map(({ property, substation }) => (
-        <Polyline 
-          key={`poly-line-${property.id}`}
-          positions={[property.coordinates as [number, number], substation.coordinates as [number, number]]} 
-          color="#4285F4" 
-          weight={1.0} 
-          dashArray="10, 15" 
-          opacity={0.85}
-          smoothFactor={2}
-          interactive={false}
-          pathOptions={{
-            className: `property-dist-line-${property.id}`,
-            pane: 'overlayPane'
-          }}
-        />
-      ))}
-    </>
-  );
-});
-
-const createColoredIcon = (color: string, isSelected: boolean = false, label?: string, distanceLabel?: string, priceLabel?: string, propertyId?: string, substationId?: string) => {
-  const width = isSelected ? 24 : 18;
-  const height = Math.round(width * (34 / 24));
-  
-  return L.divIcon({
-    className: 'custom-div-icon',
-    html: `
-      <div class="relative flex flex-col items-center" 
-        style="width: ${width}px; height: ${height}px; overflow: visible;"
-        ${propertyId ? `data-property-id="${propertyId}"` : ''} 
-        ${substationId ? `data-substation-id="${substationId}"` : ''}
+      <AdvancedMarker
+        ref={markerRef}
+        position={{ lat: substation.coordinates[0], lng: substation.coordinates[1] }}
+        onClick={() => {
+          onSelect?.(substation);
+          setInfoWindowOpen(true);
+        }}
+        zIndex={isSelected ? 1000 : 500}
       >
-        <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-lg" preserveAspectRatio="xMidYMid meet" style="width: ${width}px; height: ${height}px; display: block;">
-          <path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 34 12 34C12 34 24 21 24 12C24 5.37 18.63 0 12 0Z" fill="${color}" stroke="white" stroke-width="1.5"/>
-          <circle cx="12" cy="12" r="3.5" fill="white" opacity="0.9"/>
-        </svg>
-        <div class="absolute top-full left-1/2 -translate-x-1/2 mt-1 flex flex-col items-center gap-0.5 pointer-events-none w-[120px]">
-          ${label ? `
-            <div class="px-1 py-0 select-none text-center">
-                <span class="text-[7px] font-bold uppercase whitespace-nowrap leading-none drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]" style="color: ${color}">${label}</span>
-            </div>
-          ` : ''}
-          <div class="flex flex-row gap-0.5 justify-center">
-            ${distanceLabel ? `
-              <div class="px-1 py-0 select-none">
-                  <span class="text-[7px] font-black italic text-red-600 whitespace-nowrap leading-none drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]">${distanceLabel}</span>
-              </div>
-            ` : ''}
-            ${priceLabel ? `
-              <div class="px-1 py-0 select-none">
-                  <span class="text-[7px] font-bold text-red-600 whitespace-nowrap leading-none drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]">${priceLabel}</span>
-              </div>
-            ` : ''}
+        <div className={cn(
+          "relative flex items-center justify-center transition-all duration-300",
+          isSelected ? "scale-125" : "hover:scale-110"
+        )}>
+          <div className="absolute w-8 h-8 bg-blue-500/20 rounded-full blur-md animate-pulse" />
+          <svg width="24" height="34" viewBox="0 0 24 34" fill="none" className="drop-shadow-lg">
+            <path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 34 12 34C12 34 24 21 24 12C24 5.37 18.63 0 12 0Z" fill={SUBSTATION_COLOR} stroke="white" strokeWidth="1.5"/>
+            <circle cx="12" cy="12" r="3.5" fill="white" opacity="0.9"/>
+          </svg>
+          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 px-1.5 py-0.5 bg-white/90 backdrop-blur-sm rounded border border-blue-200 shadow-sm whitespace-nowrap">
+            <span className="text-[8px] font-bold text-blue-700 uppercase tracking-tighter">{substation.name}</span>
           </div>
         </div>
-      </div>
-    `,
-    iconSize: [width, height],
-    iconAnchor: [width / 2, height],
-  });
-};
-
-const createCandidateIcon = (isSelected: boolean = false, label?: string, isProperty: boolean = false) => {
-  const width = isSelected ? 28 : 20;
-  const height = Math.round(width * (34 / 24));
-  const color = isProperty ? '#059669' : '#475569'; // Emerald 600 for land, Slate 600 for stations
-  
-  return L.divIcon({
-    className: `custom-div-icon candidate-icon ${isProperty ? 'property-candidate' : 'station-candidate'}`,
-    html: `
-      <div class="relative flex flex-col items-center" style="width: ${width}px; height: ${height}px; overflow: visible;">
-        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-${isProperty ? 'emerald' : 'slate'}-500/20 rounded-full blur-md animate-pulse"></div>
-        <svg width="${width}" height="${height}" viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-2xl relative z-10" preserveAspectRatio="xMidYMid meet" style="width: ${width}px; height: ${height}px; display: block;">
-          <path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 34 12 34C12 34 24 21 24 12C24 5.37 18.63 0 12 0Z" fill="${color}" stroke="white" stroke-width="2"/>
-          <path d="M12 8V16M8 12H16" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
-        </svg>
-        ${label ? `
-          <div class="absolute top-full left-1/2 -translate-x-1/2 mt-1 px-2 py-0.5 bg-white/90 backdrop-blur-sm rounded-md shadow-sm border border-slate-200 select-none z-10 max-w-[120px] text-center">
-              <span class="text-[8px] font-black ${isProperty ? 'text-emerald-700' : 'text-slate-700'} uppercase whitespace-nowrap leading-none tracking-wider block truncate">${label}</span>
-          </div>
-        ` : ''}
-      </div>
-    `,
-    iconSize: [width, height],
-    iconAnchor: [width / 2, height],
-  });
-};
-
-// Memoized Substation Markers
-const SubstationLayerGroup = React.memo(({ substations, onSelect, selectedId, opacity = 1.0 }: { substations: Substation[], onSelect?: (s: Substation) => void, selectedId?: string, opacity?: number }) => {
-  return (
-    <>
-      {substations.filter(s => Array.isArray(s.coordinates) && s.coordinates.length >= 2 && !isNaN(s.coordinates[0])).map(substation => (
-        <Marker
-          key={`${substation.id}-${substation.coordinates[0]}-${substation.coordinates[1]}`}
-          position={substation.coordinates}
-          icon={createColoredIcon(SUBSTATION_COLOR, selectedId === substation.id, substation.name, undefined, undefined, undefined, substation.id)}
-          opacity={opacity}
-          zIndexOffset={selectedId === substation.id ? 1000 : 0}
-          eventHandlers={{
-            click: () => onSelect?.(substation),
-          }}
-        >
-          <Popup>
-            <div className="p-1 min-w-[120px]">
-              <div className="flex items-center gap-1.5 mb-1">
+      </AdvancedMarker>
+      {infoWindowOpen && (
+        <InfoWindow anchor={marker} onCloseClick={() => setInfoWindowOpen(false)}>
+          <div className="p-1 min-w-[140px]">
+             <div className="flex items-center gap-1.5 mb-1">
                 <Zap className="w-3 h-3 text-blue-600" />
                 <p className="font-bold text-sm leading-none m-0 text-slate-900 uppercase tracking-tight">{substation.name}</p>
               </div>
               <p className="text-[10px] text-slate-500 m-0 uppercase font-bold tracking-widest">{substation.status}</p>
               <p className="text-[11px] text-slate-400 m-0 mt-2 italic">{substation.address}</p>
-            </div>
-          </Popup>
-        </Marker>
-      ))}
+              <div className="mt-2 pt-2 border-t border-slate-100 flex gap-2">
+                <a 
+                  href={`https://earth.google.com/web/search/${substation.coordinates[0]},${substation.coordinates[1]}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[9px] font-black text-emerald-600 hover:underline flex items-center gap-1"
+                >
+                  <Globe className="w-2.5 h-2.5" />
+                  Earth View
+                </a>
+              </div>
+          </div>
+        </InfoWindow>
+      )}
     </>
   );
-});
+};
 
-// Candidate Property Markers
-const CandidatePropertyLayerGroup = ({ properties, onAdd, onDelete, selectedId }: { properties: Property[], onAdd?: (p: Property) => void, onDelete?: (id: string) => void, selectedId?: string }) => {
-  console.log("Rendering Candidate Properties:", properties.length);
+// Property Marker Component
+interface PropertyMarkerProps {
+  key?: string;
+  property: Property;
+  isSelected: boolean;
+  onSelect: (p: Property) => void;
+  distanceLabel?: string;
+  priceLabel?: string;
+}
+
+const PropertyMarker = ({ 
+  property, 
+  isSelected, 
+  onSelect,
+  distanceLabel,
+  priceLabel
+}: PropertyMarkerProps) => {
+  const [markerRef, marker] = useAdvancedMarkerRef();
+  const [infoWindowOpen, setInfoWindowOpen] = useState(false);
+  const color = PROPERTY_TYPE_COLORS[property.type] || '#4285F4';
+
   return (
-    <LayerGroup>
-      {properties.filter(p => p.coordinates && Array.isArray(p.coordinates) && !isNaN(p.coordinates[0])).map(property => (
-        <Marker
-          key={`candidate-prop-${property.id}`}
-          position={property.coordinates as [number, number]}
-          icon={createCandidateIcon(selectedId === property.id, property.name, true)}
-          zIndexOffset={selectedId === property.id ? 1100 : 600}
-        >
-          <Popup>
-            <div className="p-3 min-w-[200px]">
+    <>
+      <AdvancedMarker
+        ref={markerRef}
+        position={{ lat: property.coordinates[0], lng: property.coordinates[1] }}
+        onClick={() => {
+          onSelect(property);
+          setInfoWindowOpen(true);
+        }}
+        zIndex={isSelected ? 1100 : 600}
+      >
+        <div className={cn(
+          "relative flex flex-col items-center transition-all duration-300",
+          isSelected ? "scale-125" : "hover:scale-110"
+        )}>
+          <svg width="24" height="34" viewBox="0 0 24 34" fill="none" className="drop-shadow-lg">
+            <path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 34 12 34C12 34 24 21 24 12C24 5.37 18.63 0 12 0Z" fill={color} stroke="white" strokeWidth="1.5"/>
+            <circle cx="12" cy="12" r="3.5" fill="white" opacity="0.9"/>
+          </svg>
+          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 flex flex-col items-center gap-0.5 w-[100px]">
+            <div className="px-1 py-0 bg-white/80 rounded backdrop-blur-sm border border-slate-100 shadow-sm text-center">
+              <span className="text-[7px] font-bold uppercase whitespace-nowrap block truncate leading-tight" style={{ color }}>{property.name}</span>
+            </div>
+            {(distanceLabel || priceLabel) && (
+               <div className="flex gap-1 justify-center">
+                  {distanceLabel && <span className="text-[7px] font-black italic text-red-600 bg-white/90 px-1 rounded shadow-sm">{distanceLabel}</span>}
+                  {priceLabel && <span className="text-[7px] font-bold text-slate-700 bg-white/90 px-1 rounded shadow-sm">{priceLabel}</span>}
+               </div>
+            )}
+          </div>
+        </div>
+      </AdvancedMarker>
+      {infoWindowOpen && (
+        <InfoWindow anchor={marker} onCloseClick={() => setInfoWindowOpen(false)}>
+           <div className="p-1 min-w-[140px]">
+              <p className="font-bold text-sm m-0 text-slate-900">{property.name}</p>
+              <p className="text-[10px] text-slate-500 m-0 uppercase font-bold">{property.type}</p>
+              <p className="text-[11px] text-slate-400 m-0 mt-1">{property.address.suburb}, {property.address.city}</p>
+              <a 
+                href={`https://www.google.com/maps?q=${property.coordinates[0]},${property.coordinates[1]}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[9px] font-bold text-blue-600 mt-2 block"
+              >
+                View on Google Maps
+              </a>
+           </div>
+        </InfoWindow>
+      )}
+    </>
+  );
+};
+
+// Candidate Marker Component
+interface CandidateMarkerProps {
+  key?: string;
+  item: Property | Substation;
+  isProperty: boolean;
+  isSelected: boolean;
+  onAdd: (item: any) => void;
+  onDelete: (id: string) => void;
+}
+
+const CandidateMarker = ({
+  item,
+  isProperty,
+  isSelected,
+  onAdd,
+  onDelete
+}: CandidateMarkerProps) => {
+  const [markerRef, marker] = useAdvancedMarkerRef();
+  const [infoWindowOpen, setInfoWindowOpen] = useState(false);
+  const color = isProperty ? '#059669' : '#475569';
+
+  return (
+    <>
+      <AdvancedMarker
+        ref={markerRef}
+        position={{ lat: item.coordinates[0], lng: item.coordinates[1] }}
+        onClick={() => setInfoWindowOpen(true)}
+        zIndex={isSelected ? 1050 : 550}
+      >
+        <div className="relative group cursor-pointer">
+           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-slate-500/20 rounded-full blur-md animate-pulse" />
+           <svg width="24" height="34" viewBox="0 0 24 34" fill="none" className="drop-shadow-2xl relative z-10 transition-transform group-hover:scale-110">
+              <path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 34 12 34C12 34 24 21 24 12C24 5.37 18.63 0 12 0Z" fill={color} stroke="white" strokeWidth="2"/>
+              <path d="M12 8V16M8 12H16" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+           </svg>
+           <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 px-2 py-0.5 bg-white/90 backdrop-blur-sm rounded-md shadow-sm border border-slate-200 z-10 max-w-[100px] text-center">
+              <span className={cn("text-[8px] font-black uppercase whitespace-nowrap block truncate", isProperty ? "text-emerald-700" : "text-slate-700")}>{item.name}</span>
+           </div>
+        </div>
+      </AdvancedMarker>
+      {infoWindowOpen && (
+        <InfoWindow anchor={marker} onCloseClick={() => setInfoWindowOpen(false)}>
+           <div className="p-3 min-w-[200px]">
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-6 h-6 rounded-lg bg-emerald-50 flex items-center justify-center">
-                  <Mountain className="w-3.5 h-3.5 text-emerald-600" />
+                <div className={cn("w-6 h-6 rounded-lg flex items-center justify-center", isProperty ? "bg-emerald-50" : "bg-slate-100")}>
+                  {isProperty ? <Mountain className="w-3.5 h-3.5 text-emerald-600" /> : <Zap className="w-3.5 h-3.5 text-slate-400" />}
                 </div>
                 <div>
-                  <p className="font-black text-xs m-0 text-slate-900 uppercase tracking-tight leading-none">{property.name}</p>
-                  <p className="text-[8px] text-emerald-600 m-0 uppercase font-bold tracking-[0.1em] mt-1">Found Listing</p>
+                  <p className="font-black text-xs m-0 text-slate-900 uppercase tracking-tight leading-none">{item.name}</p>
+                  <p className="text-[8px] text-slate-400 m-0 uppercase font-bold tracking-widest mt-1">Discovery Listing</p>
                 </div>
               </div>
               
-              <div className="space-y-1.5 mb-4">
-                <p className="text-[10px] text-slate-500 m-0 leading-relaxed italic">{property.address.street}, {property.address.suburb}</p>
-                <div className="flex items-center justify-between gap-2 mt-2">
-                  {property.financials?.purchasePrice && (
-                    <p className="text-[9px] font-black text-slate-700 bg-slate-50 px-1.5 py-0.5 rounded inline-block">
-                      R {(property.financials.purchasePrice / 1000000).toFixed(1)}M
+              <div className="space-y-1 mb-4">
+                <p className="text-[10px] text-slate-500 m-0 leading-relaxed italic">
+                  {isProperty ? (item as Property).address.suburb : (item as Substation).address}
+                </p>
+                {isProperty && (item as Property).financials?.purchasePrice && (
+                    <p className="text-[9px] font-black text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded inline-block">
+                      R {((item as Property).financials!.purchasePrice / 1000000).toFixed(1)}M
                     </p>
-                  )}
-                  {property.p24Url && (
-                    <a 
-                      href={property.p24Url} 
-                      target="_blank" 
-                      referrerPolicy="no-referrer"
-                      className="text-[9px] font-black text-blue-600 hover:underline flex items-center gap-1"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      View Listing
-                      <ExternalLink className="w-2.5 h-2.5" />
-                    </a>
-                  )}
-                </div>
+                )}
               </div>
 
               <div className="flex flex-col gap-2">
                 <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAdd?.(property);
-                  }}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 group"
+                  onClick={() => onAdd(item)}
+                  className="w-full bg-slate-900 hover:bg-black text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                 >
-                  <Check className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                  <Check className="w-3.5 h-3.5" />
                   Confirm & Import
                 </button>
-                
-                {onDelete && (
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(property.id);
-                    }}
-                    className="w-full bg-white border border-slate-200 text-slate-400 hover:text-red-500 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
-                  >
-                    <X className="w-3 h-3" />
-                    Discard Discovery
-                  </button>
-                )}
+                <button 
+                  onClick={() => onDelete(item.id)}
+                  className="w-full bg-white border border-slate-200 text-slate-400 hover:text-red-500 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                >
+                  <X className="w-3 h-3" />
+                  Discard
+                </button>
               </div>
-            </div>
-          </Popup>
-        </Marker>
-      ))}
-    </LayerGroup>
+           </div>
+        </InfoWindow>
+      )}
+    </>
   );
 };
 
-// Component to handle map movements when selected property changes
-function MapController({ center, rulerActive }: { center: [number, number] | null, rulerActive: boolean }) {
+export default function MapComponent(props: MapComponentProps) {
+  const {
+    properties,
+    substations = [],
+    candidateSubstations = [],
+    candidateProperties = [],
+    onSelectProperty,
+    selectedProperty,
+    onSelectSubstation,
+    selectedSubstation,
+    onAddSubstation,
+    onDeleteCandidateSubstation,
+    onAddProperty,
+    onDeleteCandidateProperty,
+    rulerActive,
+    onRulerActiveChange,
+    onOpenDetails,
+    isFullscreen,
+    onFullscreenChange,
+    onDiscoverNearby,
+    onDiscoverLand,
+    onCancelDiscovery,
+    onClearCandidates,
+    isDiscovering,
+    isDiscoveringLand,
+    mapCenterOverride
+  } = props;
+
   const map = useMap();
-  const lastCenterRef = React.useRef<[number, number] | null>(null);
-  
-  useEffect(() => {
-    if (!center || rulerActive || isNaN(center[0]) || isNaN(center[1])) return;
-
-    // Check if the map has been initialized with a view yet to avoid Leaflet error
-    try {
-      map.getCenter();
-      map.getZoom();
-    } catch (e) {
-      // Map view not set yet, don't flyTo
-      return;
-    }
-    
-    // Only fly if the center actually changed significantly
-    if (!lastCenterRef.current || 
-        Math.abs(lastCenterRef.current[0] - center[0]) > 0.00001 || 
-        Math.abs(lastCenterRef.current[1] - center[1]) > 0.00001) {
-      
-      map.flyTo(center, map.getZoom(), {
-        duration: 1.2,
-        easeLinearity: 0.25
-      });
-      lastCenterRef.current = center;
-    }
-  }, [center, map, rulerActive]);
-  
-  return null;
-}
-
-// Candidate Substation Markers
-const CandidateSubstationLayerGroup = ({ 
-  substations, 
-  onAdd, 
-  onDelete,
-  selectedId 
-}: { 
-  substations: Substation[], 
-  onAdd?: (s: Substation) => void, 
-  onDelete?: (id: string) => void,
-  selectedId?: string 
-}) => {
-  return (
-    <LayerGroup>
-      {substations.filter(s => s.coordinates && Array.isArray(s.coordinates)).map(substation => (
-        <Marker
-          key={`candidate-${substation.id}`}
-          position={substation.coordinates}
-          icon={createCandidateIcon(selectedId === substation.id, substation.name)}
-          zIndexOffset={selectedId === substation.id ? 900 : 400}
-        >
-          <Popup>
-            <div className="p-3 min-w-[180px]">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center">
-                  <Zap className="w-3.5 h-3.5 text-slate-400" />
-                </div>
-                <div>
-                  <p className="font-black text-xs m-0 text-slate-900 uppercase tracking-tight leading-none">{substation.name}</p>
-                  <p className="text-[8px] text-slate-400 m-0 uppercase font-bold tracking-[0.1em] mt-1">
-                    {substation.owner || 'Candidate Entity'}
-                  </p>
-                </div>
-              </div>
-              
-              <div className="space-y-1.5 mb-4">
-                <p className="text-[10px] text-slate-500 m-0 leading-relaxed italic">{substation.address}</p>
-                {substation.voltageKV && (
-                  <p className="text-[9px] font-bold text-slate-700 bg-slate-50 px-1.5 py-0.5 rounded inline-block">
-                    {substation.voltageKV} kV
-                  </p>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAdd?.(substation);
-                  }}
-                  className="w-full bg-slate-900 hover:bg-black text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 group"
-                >
-                  <Check className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                  Confirm & Import
-                </button>
-                
-                {onDelete && (
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(substation.id);
-                    }}
-                    className="w-full bg-white border border-slate-200 text-slate-400 hover:text-red-500 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
-                  >
-                    <X className="w-3 h-3" />
-                    Discard Discovery
-                  </button>
-                )}
-              </div>
-            </div>
-          </Popup>
-        </Marker>
-      ))}
-    </LayerGroup>
-  );
-};
-
-export default function MapComponent({ 
-  properties, 
-  substations = [],
-  candidateSubstations = [],
-  candidateProperties = [],
-  onSelectProperty, 
-  selectedProperty,
-  onSelectSubstation,
-  selectedSubstation,
-  onAddSubstation,
-  onDeleteCandidateSubstation,
-  onAddProperty,
-  onDeleteCandidateProperty,
-  rulerActive,
-  onRulerActiveChange,
-  onOpenDetails,
-  isFullscreen,
-  onFullscreenChange,
-  onDiscoverNearby,
-  onDiscoverLand,
-  onCancelDiscovery,
-  onClearCandidates,
-  isDiscovering = false,
-  isDiscoveringLand = false,
-  mapCenterOverride
-}: MapComponentProps) {
-  const [isSearchingArea, setIsSearchingArea] = useState(false);
-  const [currentMapName, setCurrentMapName] = useState<string | null>(null);
-  const [rulerPoints, setRulerPoints] = useState<[number, number][]>([]);
-  const [distance, setDistance] = useState<number | null>(null);
-  const [showBoundaries, setShowBoundaries] = useState(true);
-  const [showStructures, setShowStructures] = useState(false);
-  const [selectedBasemapId, setSelectedBasemapId] = useState('streets');
+  const [selectedBasemapId, setSelectedBasemapId] = useState<'streets' | 'satellite' | 'terrain' | 'hybrid'>('streets');
   const [isLayerPanelOpen, setIsLayerPanelOpen] = useState(false);
-  const [layerOpacities, setLayerOpacities] = useState({
-    base: 1.0,
-    substations: 1.0,
-    cadastre: 0.8,
-    buildings: 0.5
-  });
-  const [isSelectingForExport, setIsSelectingForExport] = useState(false);
+  const [isExportPanelOpen, setIsExportPanelOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const mapInstanceRef = React.useRef<L.Map | null>(null);
+  const [rulerPoints, setRulerPoints] = useState<google.maps.LatLngLiteral[]>([]);
+  const [rulerDistance, setRulerDistance] = useState<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Improved performance: pre-calculate closest substation for all properties
-  const propertyDistances = React.useMemo(() => {
-    if (!substations || substations.length === 0) return [];
-    
-    return properties.filter(p => p.coordinates && Array.isArray(p.coordinates)).map(property => {
+  // Map settings
+  const mapOptions = useMemo<google.maps.MapOptions>(() => ({
+    mapId: 'propscope_main_map',
+    disableDefaultUI: true,
+    clickableIcons: false,
+    mapTypeId: selectedBasemapId,
+    tilt: 45,
+    heading: 0,
+    gestureHandling: 'auto'
+  }), [selectedBasemapId]);
+
+  // Initial center
+  const initialCenter = useMemo<google.maps.LatLngLiteral>(() => {
+    if (selectedProperty) return { lat: selectedProperty.coordinates[0], lng: selectedProperty.coordinates[1] };
+    if (properties.length > 0) return { lat: properties[0].coordinates[0], lng: properties[0].coordinates[1] };
+    return { lat: -26.1311, lng: 28.0536 }; // Johannesburg
+  }, []);
+
+  // Update map center when selection changes
+  useEffect(() => {
+    if (!map) return;
+    const target = mapCenterOverride || selectedProperty?.coordinates || selectedSubstation?.coordinates;
+    if (target && !isNaN(target[0])) {
+      map.panTo({ lat: target[0], lng: target[1] });
+    }
+  }, [map, selectedProperty, selectedSubstation, mapCenterOverride]);
+
+  // Distance calculations for property-substation lines
+  const propertyDistances = useMemo(() => {
+    if (substations.length === 0) return [];
+    return properties.map(property => {
       let minDistance = Infinity;
       let closestSub = substations[0];
-      
       substations.forEach(sub => {
-        if (!sub.coordinates || !Array.isArray(sub.coordinates)) return;
-        const d = calculateDistance(
-          property.coordinates[0],
-          property.coordinates[1],
-          sub.coordinates[0],
-          sub.coordinates[1]
-        );
+        const d = calculateDistance(property.coordinates[0], property.coordinates[1], sub.coordinates[0], sub.coordinates[1]);
         if (d < minDistance) {
           minDistance = d;
           closestSub = sub;
         }
       });
-      
       return { property, substation: closestSub, distance: minDistance };
     });
   }, [properties, substations]);
 
-  const MapEvents = () => {
-    const map = useMap();
+  // Ruler Tool Click Handler
+  useEffect(() => {
+    if (!map || !rulerActive) return;
 
-    useEffect(() => {
-      const handleOverlayAdd = (e: any) => {
-        if (e.name === "Property Boundaries (National)") {
-          setShowBoundaries(true);
+    const listener = map.addListener('click', (e: google.maps.MapMouseEvent) => {
+      if (!e.latLng) return;
+      const point = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+      
+      setRulerPoints(prev => {
+        const next = [...prev, point];
+        if (next.length >= 2) {
+           const d = calculateDistance(next[0].lat, next[0].lng, next[1].lat, next[1].lng);
+           setRulerDistance(d);
+           return next.slice(-2); // Only keep last two for simple distance
         }
-        if (e.name === "Building Structures") {
-          setShowStructures(true);
-        }
-      };
-      const handleOverlayRemove = (e: any) => {
-        if (e.name === "Property Boundaries (National)") {
-          setShowBoundaries(false);
-        }
-        if (e.name === "Building Structures") {
-          setShowStructures(false);
-        }
-      };
-
-      map.on('overlayadd', handleOverlayAdd);
-      map.on('overlayremove', handleOverlayRemove);
-
-      return () => {
-        map.off('overlayadd', handleOverlayAdd);
-        map.off('overlayremove', handleOverlayRemove);
-      };
-    }, [map]);
-
-    useMapEvents({
-      click(e) {
-        // Only allow manual ruler if substation distances are toggled off
-        if (rulerActive) {
-          const newPoints: [number, number][] = [...rulerPoints, [e.latlng.lat, e.latlng.lng]];
-          if (newPoints.length > 2) {
-            setRulerPoints([[e.latlng.lat, e.latlng.lng]]);
-            setDistance(null);
-          } else {
-            setRulerPoints(newPoints);
-            if (newPoints.length === 2) {
-              const d = calculateDistance(newPoints[0][0], newPoints[0][1], newPoints[1][0], newPoints[1][1]);
-              setDistance(d);
-            }
-          }
-        }
-      },
-      zoomend() {},
+        return next;
+      });
     });
 
-    return null;
-  };
+    return () => google.maps.event.removeListener(listener);
+  }, [map, rulerActive]);
 
-  // Helper to ensure map is properly sized
-  function MapResizeHandler() {
-    const map = useMap();
-    useEffect(() => {
-      mapInstanceRef.current = map;
-      const resizeObserver = new ResizeObserver(() => {
-        map.invalidateSize();
-      });
-      if (map.getContainer()) {
-        resizeObserver.observe(map.getContainer());
-      }
-      return () => {
-        resizeObserver.disconnect();
-        mapInstanceRef.current = null;
-      };
-    }, [map]);
-    return null;
-  }
-
-  // Helper to validate coordinates
-  const isValidCoord = (c: any): c is [number, number] => 
-    Array.isArray(c) && c.length >= 2 && typeof c[0] === 'number' && typeof c[1] === 'number' && !isNaN(c[0]) && !isNaN(c[1]);
-
-  // Determine stable coordinates for map centering
-  const targetCenter = React.useMemo(() => {
-    if (mapCenterOverride && isValidCoord(mapCenterOverride)) {
-        return mapCenterOverride;
-    }
-    if (selectedProperty && isValidCoord(selectedProperty.coordinates)) {
-      return selectedProperty.coordinates;
-    }
-    if (selectedSubstation && isValidCoord(selectedSubstation.coordinates)) {
-      return selectedSubstation.coordinates;
-    }
-    return null;
-  }, [selectedProperty, selectedSubstation, mapCenterOverride]);
-
-  // Initial center should only be computed once to prevent jumping on data updates
-  const [initialCenter] = useState<[number, number]>(() => {
-    if (selectedProperty && isValidCoord(selectedProperty.coordinates)) return selectedProperty.coordinates;
-    
-    // Look for the first valid property coordinate
-    const firstValidProp = properties.find(p => isValidCoord(p.coordinates));
-    if (firstValidProp) return firstValidProp.coordinates;
-
-    // Use a default for South Africa (Johannesburg area)
-    return [-26.1311, 28.0536];
-  });
-
+  // Reset ruler when deactivated
   useEffect(() => {
     if (!rulerActive) {
       setRulerPoints([]);
-      setDistance(null);
+      setRulerDistance(null);
     }
   }, [rulerActive]);
 
-  const handleExportToPDF = async (selectedProperties: Property[]) => {
+  // Discover nearby handler
+  const handleDiscover = useCallback(() => {
+    if (!map || !onDiscoverNearby) return;
+    const bounds = map.getBounds();
+    if (!bounds) return;
+    onDiscoverNearby({
+      north: bounds.getNorthEast().lat(),
+      south: bounds.getSouthWest().lat(),
+      east: bounds.getNorthEast().lng(),
+      west: bounds.getSouthWest().lng()
+    });
+  }, [map, onDiscoverNearby]);
+
+  // Export handlers
+  const handleExportPDF = async (selected: Property[]) => {
     if (!containerRef.current) return;
-    
     setIsExporting(true);
     try {
-      // Prepare map for capture
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.stop();
-        mapInstanceRef.current.invalidateSize();
-      }
-
-      // Small delay to ensure map markers and tiles are fully settled after stop/invalidate
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      // Target the actual leaflet container for better isolation
-      const container = containerRef.current?.querySelector('.leaflet-container') as HTMLElement;
-      if (!container) {
-        throw new Error("Leaflet map container not found");
-      }
-
-      let imgData: string | null = null;
-      let imgAspectRatio = 1;
-      
-      try {
-        const canvas = await html2canvas(container, {
-          useCORS: true,
-          logging: false,
-          scale: 2, 
-          backgroundColor: '#ffffff',
-          allowTaint: false,
-          imageTimeout: 20000,
-          removeContainer: true,
-          onclone: (clonedDoc) => {
-            // Clean modern color functions that html2canvas can't parse
-            const styleTags = clonedDoc.getElementsByTagName('style');
-            const MODERN_COLOR_REGEX = /(oklch|oklab|color-mix)\([^)]+\)/g;
-            const FALLBACK_COLOR = '#6366f1';
-
-            for (let i = 0; i < styleTags.length; i++) {
-              const style = styleTags[i];
-              if (style.textContent && (style.textContent.includes('oklch') || style.textContent.includes('oklab') || style.textContent.includes('color-mix'))) {
-                style.textContent = style.textContent.replace(MODERN_COLOR_REGEX, FALLBACK_COLOR);
-              }
-            }
-            
-            const allElements = clonedDoc.querySelectorAll('*');
-            allElements.forEach((el) => {
-              const htmlEl = el as HTMLElement;
-              // Check SVG and direct attributes
-              ['fill', 'stroke', 'color', 'style'].forEach(attr => {
-                const val = htmlEl.getAttribute(attr);
-                if (val && (val.includes('oklch') || val.includes('oklab') || val.includes('color-mix'))) {
-                  htmlEl.setAttribute(attr, val.replace(MODERN_COLOR_REGEX, FALLBACK_COLOR));
-                }
-              });
-              
-              // Force-fix inline styles
-              if (htmlEl.style) {
-                ['color', 'backgroundColor', 'borderColor', 'fill', 'stroke'].forEach(prop => {
-                  try {
-                    const val = htmlEl.style.getPropertyValue(prop);
-                    if (val && (val.includes('oklch') || val.includes('oklab') || val.includes('color-mix'))) {
-                      htmlEl.style.setProperty(prop, FALLBACK_COLOR, 'important');
-                    }
-                  } catch (e) {}
-                });
-              }
-            });
-          },
-          ignoreElements: (element) => {
-            // Only export map with selected properties and their nearest substations
-            const selectedIds = selectedProperties.map(p => p.id);
-            const neededSubstationIds = propertyDistances
-              .filter(pd => selectedIds.includes(pd.property.id))
-              .map(pd => pd.substation.id);
-
-            // Leaflet markers check
-            if (element.classList.contains('leaflet-marker-icon')) {
-              const propId = element.querySelector('[data-property-id]')?.getAttribute('data-property-id');
-              const subId = element.querySelector('[data-substation-id]')?.getAttribute('data-substation-id');
-              
-              if (propId && !selectedIds.includes(propId)) return true;
-              if (subId && !neededSubstationIds.includes(subId)) return true;
-            }
-
-            // Distance labels check (divIcons can also have these)
-            const propertyId = element.getAttribute('data-property-id');
-            if (propertyId && !selectedIds.includes(propertyId)) {
-              return true;
-            }
-
-            // Filter distance lines (SVG paths)
-            const isDistLine = Array.from(element.classList).some(cls => cls.startsWith('property-dist-line-'));
-            if (isDistLine) {
-              const linePropId = Array.from(element.classList).find(cls => cls.startsWith('property-dist-line-'))?.replace('property-dist-line-', '');
-              if (linePropId && !selectedIds.includes(linePropId)) {
-                return true;
-              }
-            }
-
-            return (
-              element.hasAttribute('data-html2canvas-ignore') || 
-              element.classList.contains('leaflet-control-container')
-            );
-          }
-        });
-        
-        imgAspectRatio = canvas.height / canvas.width;
-        imgData = canvas.toDataURL('image/png', 1.0);
-      } catch (canvasError) {
-        console.warn('Map capture failed, proceeding with data-only report', canvasError);
-      }
-      const pdf = new jsPDF({
-        orientation: 'p',
-        unit: 'mm',
-        format: 'a4',
-        compress: true
+      const canvas = await html2canvas(containerRef.current, {
+        useCORS: true,
+        allowTaint: false,
+        logging: false,
+        scale: 2,
+        ignoreElements: (el) => {
+          return el.getAttribute('data-html2canvas-ignore') === 'true';
+        }
       });
       
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const pdf = new jsPDF('l', 'mm', 'a4');
+      const width = pdf.internal.pageSize.getWidth();
+      const height = pdf.internal.pageSize.getHeight();
       
-      // Header
-      pdf.setFillColor(15, 23, 42); 
-      pdf.rect(0, 0, pageWidth, 40, 'F');
-      
-      pdf.setTextColor(255, 255, 255);
-      pdf.setFontSize(22);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('SPATIAL ANALYSIS REPORT', 15, 20);
-      
+      pdf.addImage(imgData, 'JPEG', 0, 0, width, height);
       pdf.setFontSize(10);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(`Generated on ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, 15, 30);
-      pdf.text(`Total Properties: ${selectedProperties.length}`, 15, 35);
-
-      let currentY = 50;
-      
-      // Map Section (Only if we have the image)
-      if (imgData) {
-        pdf.setTextColor(15, 23, 42);
-        pdf.setFontSize(14);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text('Map Overview', 15, currentY);
-        
-        const imgWidth = pageWidth - 20;
-        const imgHeight = imgWidth * imgAspectRatio; // Dynamic height based on ratio
-        
-        pdf.setDrawColor(226, 232, 240);
-        pdf.rect(9.5, currentY + 4.5, imgWidth + 1, imgHeight + 1, 'S');
-        pdf.addImage(imgData, 'PNG', 10, currentY + 5, imgWidth, imgHeight);
-        
-        currentY += imgHeight + 20;
-      } else {
-        pdf.setTextColor(100, 116, 139);
-        pdf.setFontSize(10);
-        pdf.setFont('helvetica', 'italic');
-        pdf.text('Map visualization currently unavailable. Textual report follows.', 15, currentY);
-        currentY += 15;
-      }
-
-      // Properties Details
-      currentY += 8;
-
-      selectedProperties.forEach((prop, index) => {
-        if (currentY > pageHeight - 50) {
-          pdf.addPage();
-          currentY = 20;
-        }
-
-        pdf.setFillColor(248, 250, 252);
-        pdf.roundedRect(10, currentY, pageWidth - 20, 35, 2, 2, 'F');
-        
-        pdf.setTextColor(15, 23, 42);
-        pdf.setFontSize(11);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text(`${index + 1}. ${prop.name}`, 15, currentY + 10);
-        
-        pdf.setFontSize(9);
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(100, 116, 139);
-        pdf.text(`${prop.address.street}, ${prop.address.suburb}`, 15, currentY + 17);
-        
-        pdf.setTextColor(79, 70, 229);
-        pdf.text(`Type: ${prop.type}`, 15, currentY + 25);
-        
-        const distInfo = propertyDistances.find(pd => pd.property.id === prop.id);
-        if (distInfo) {
-          pdf.text(`Distance: ${(distInfo.distance / 1000).toFixed(2)}km`, 80, currentY + 25);
-          pdf.text(`Substation: ${distInfo.substation.name}`, 80, currentY + 30);
-        }
-
-        if (prop.financials?.purchasePrice) {
-          pdf.setTextColor(5, 150, 105);
-          pdf.text(`Price: R ${prop.financials.purchasePrice?.toLocaleString() || '0'}`, 140, currentY + 25);
-        }
-
-        currentY += 40;
-      });
-
-      const fileName = `spatial_report_${Date.now()}.pdf`;
-      
-      // Use standard save as primary
-      pdf.save(fileName);
-      
-      setIsSelectingForExport(false);
+      pdf.text(`PropScope Spatial Report - ${new Date().toLocaleDateString()}`, 10, 10);
+      pdf.save(`propscope-report-${Date.now()}.pdf`);
     } catch (error) {
-      console.error('PDF Export Error:', error);
-      alert('Generating PDF failed. This might be due to map tile access restrictions. Try again or check your connection.');
+      console.error('PDF Export failed:', error);
     } finally {
       setIsExporting(false);
+      setIsExportPanelOpen(false);
     }
   };
 
-  const handleExportAsImage = async (selectedProperties: Property[]) => {
+  const handleExportImage = async () => {
     if (!containerRef.current) return;
-    
     setIsExporting(true);
     try {
-      // Prepare map for capture
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.stop();
-        mapInstanceRef.current.invalidateSize();
-      }
-
-      // Small delay to ensure map markers and tiles are fully settled
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      const container = containerRef.current?.querySelector('.leaflet-container') as HTMLElement;
-      if (!container) {
-        throw new Error("Leaflet map container not found");
-      }
-
-      const canvas = await html2canvas(container, {
+       const canvas = await html2canvas(containerRef.current, {
         useCORS: true,
-        logging: false,
-        scale: 2, 
-        backgroundColor: '#ffffff',
         allowTaint: false,
-        imageTimeout: 20000,
-        removeContainer: true,
-        onclone: (clonedDoc) => {
-          // Clean style blocks of any modern color functions that break capture
-          const MODERN_COLOR_REGEX = /(oklch|oklab|color-mix)\([^)]+\)/g;
-          const FALLBACK_COLOR = '#6366f1';
-
-          const styleTags = clonedDoc.getElementsByTagName('style');
-          for (let i = 0; i < styleTags.length; i++) {
-            const style = styleTags[i];
-            if (style.textContent && (style.textContent.includes('oklch') || style.textContent.includes('oklab') || style.textContent.includes('color-mix'))) {
-              style.textContent = style.textContent.replace(MODERN_COLOR_REGEX, FALLBACK_COLOR);
-            }
-          }
-          
-          const allElements = clonedDoc.querySelectorAll('*');
-          allElements.forEach((el) => {
-            const htmlEl = el as HTMLElement;
-            ['fill', 'stroke', 'color', 'style'].forEach(attr => {
-              const val = htmlEl.getAttribute(attr);
-              if (val && (val.includes('oklch') || val.includes('oklab') || val.includes('color-mix'))) {
-                htmlEl.setAttribute(attr, val.replace(MODERN_COLOR_REGEX, FALLBACK_COLOR));
-              }
-            });
-            
-            if (htmlEl.style) {
-              ['color', 'backgroundColor', 'borderColor', 'fill', 'stroke'].forEach(prop => {
-                try {
-                  const val = htmlEl.style.getPropertyValue(prop);
-                  if (val && (val.includes('oklch') || val.includes('oklab') || val.includes('color-mix'))) {
-                    htmlEl.style.setProperty(prop, FALLBACK_COLOR, 'important');
-                  }
-                } catch (e) {}
-              });
-            }
-          });
-        },
-        ignoreElements: (element) => {
-          // Filter selected properties and their nearest substations for image too
-          const selectedIds = selectedProperties.map(p => p.id);
-          const neededSubstationIds = propertyDistances
-            .filter(pd => selectedIds.includes(pd.property.id))
-            .map(pd => pd.substation.id);
-
-          // Leaflet markers check
-          if (element.classList.contains('leaflet-marker-icon')) {
-            const propId = element.querySelector('[data-property-id]')?.getAttribute('data-property-id');
-            const subId = element.querySelector('[data-substation-id]')?.getAttribute('data-substation-id');
-            
-            if (propId && !selectedIds.includes(propId)) return true;
-            if (subId && !neededSubstationIds.includes(subId)) return true;
-          }
-
-          // Distance labels check
-          const propertyId = element.getAttribute('data-property-id');
-          if (propertyId && !selectedIds.includes(propertyId)) {
-            return true;
-          }
-
-          // Filter distance lines
-          const isDistLine = Array.from(element.classList).some(cls => cls.startsWith('property-dist-line-'));
-          if (isDistLine) {
-            const linePropId = Array.from(element.classList).find(cls => cls.startsWith('property-dist-line-'))?.replace('property-dist-line-', '');
-            if (linePropId && !selectedIds.includes(linePropId)) {
-              return true;
-            }
-          }
-
-          return (
-            element.hasAttribute('data-html2canvas-ignore') || 
-            element.classList.contains('leaflet-control-container')
-          );
-        }
+        scale: 2
       });
-
-      const imgData = canvas.toDataURL('image/png', 1.0);
       const link = document.createElement('a');
-      link.download = `spatial_snapshot_${Date.now()}.png`;
-      link.href = imgData;
+      link.download = `propscope-map-${Date.now()}.png`;
+      link.href = canvas.toDataURL('image/png');
       link.click();
-      
-      setIsSelectingForExport(false);
     } catch (error) {
-      console.error('Image Export Error:', error);
-      alert('Generating image failed. This might be due to map tile access restrictions.');
+      console.error('Image Export failed:', error);
     } finally {
       setIsExporting(false);
+      setIsExportPanelOpen(false);
     }
   };
 
   return (
-    <div 
-      ref={containerRef}
-      className={cn(
-      "relative rounded-xl overflow-hidden border border-slate-200 shadow-sm transition-all duration-500 ease-in-out",
-      isFullscreen ? "fixed inset-0 z-[5000] rounded-none border-none" : "w-full h-full"
-    )}>
-      <MapContainer 
-        center={initialCenter} 
-        zoom={13} 
-        zoomSnap={0.25}
-        zoomDelta={0.25}
-        wheelPxPerZoomLevel={120} 
-        style={{ height: '100%', width: '100%' }} 
-        zoomControl={false}
-        preferCanvas={false}
-        whenReady={(map) => {
-          mapInstanceRef.current = map.target;
-        }}
+    <div className="relative w-full h-full rounded-2xl overflow-hidden shadow-sm border border-slate-200" ref={containerRef}>
+      <Map
+        defaultCenter={initialCenter}
+        defaultZoom={13}
+        {...mapOptions}
+        internalUsageAttributionIds={[ATTRIBUTION]}
+        className="w-full h-full"
       >
-        <MapResizeHandler />
-    <LayersControl position="topright">
-      <LayersControl.BaseLayer checked={selectedBasemapId === 'streets'} name="Standard Streets">
-        <TileLayer
-          url={ESRI_BASEMAPS.find(b => b.id === 'streets')?.url || ""}
-          attribution={ESRI_BASEMAPS.find(b => b.id === 'streets')?.attribution}
-          opacity={layerOpacities.base}
-          crossOrigin="anonymous"
-        />
-      </LayersControl.BaseLayer>
-      
-      <LayersControl.BaseLayer checked={selectedBasemapId === 'satellite'} name="Imagery / Satellite">
-        <TileLayer
-          url={ESRI_BASEMAPS.find(b => b.id === 'satellite')?.url || ""}
-          attribution={ESRI_BASEMAPS.find(b => b.id === 'satellite')?.attribution}
-          opacity={layerOpacities.base}
-          crossOrigin="anonymous"
-        />
-      </LayersControl.BaseLayer>
-
-      <LayersControl.BaseLayer checked={selectedBasemapId === 'topo'} name="Topographic">
-        <TileLayer
-          url={ESRI_BASEMAPS.find(b => b.id === 'topo')?.url || ""}
-          attribution={ESRI_BASEMAPS.find(b => b.id === 'topo')?.attribution}
-          opacity={layerOpacities.base}
-          crossOrigin="anonymous"
-        />
-      </LayersControl.BaseLayer>
-
-      <LayersControl.Overlay checked={showBoundaries} name="Property Boundaries (National)">
-        <LayerGroup />
-      </LayersControl.Overlay>
-
-      <LayersControl.Overlay checked={showStructures} name="Building Structures">
-        <LayerGroup />
-      </LayersControl.Overlay>
-    </LayersControl>
-
-    <EsriLayer
-      url="https://maps.geoscience.org.za/arcgis/rest/services/Cadastre/MapServer"
-      layers={[0, 1, 2, 3, 4]}
-      opacity={layerOpacities.cadastre}
-      visible={showBoundaries}
-      name="Cadastral"
-    />
-
-    <EsriLayer
-      url="https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/MS_Building_Footprints_South_Africa/MapServer"
-      type="tiled"
-      opacity={layerOpacities.buildings}
-      visible={showStructures}
-      name="Buildings"
-    />
-
-        <MapController center={targetCenter} rulerActive={rulerActive} />
-
-        {React.useMemo(() => properties.filter(p => Array.isArray(p.coordinates) && p.coordinates.length >= 2 && !isNaN(p.coordinates[0])).map(property => {
-          const distInfo = propertyDistances.find(pd => pd.property.id === property.id);
-          const distanceLabel = distInfo ? `${(distInfo.distance / 1000).toFixed(2)}km` : undefined;
-          const priceLabel = property.financials?.purchasePrice ? `R ${(property.financials.purchasePrice / 1000000).toFixed(1)}M` : undefined;
-          
-          return (
-            <Marker
-              key={`${property.id}-${property.coordinates[0]}-${property.coordinates[1]}`}
-              position={property.coordinates as [number, number]}
-              icon={createColoredIcon(
-                PROPERTY_TYPE_COLORS[property.type] || CLASSIC_RED,
-                selectedProperty?.id === property.id,
-                property.name,
-                distanceLabel,
-                priceLabel,
-                property.id
-              )}
-              zIndexOffset={selectedProperty?.id === property.id ? 1000 : 0}
-              eventHandlers={{ click: () => onSelectProperty(property) }}
-            />
-          );
-        }), [properties, propertyDistances, selectedProperty?.id, onSelectProperty])}
-        
-        <SubstationLayerGroup 
-          substations={substations} 
-          onSelect={onSelectSubstation} 
-          selectedId={selectedSubstation?.id} 
-          opacity={layerOpacities.substations}
-        />
-        
-        <CandidateSubstationLayerGroup 
-          substations={candidateSubstations} 
-          onAdd={onAddSubstation} 
-          onDelete={onDeleteCandidateSubstation}
-          selectedId={selectedSubstation?.id} 
-        />
-
-        <CandidatePropertyLayerGroup 
-          properties={candidateProperties}
-          onAdd={onAddProperty}
-          onDelete={onDeleteCandidateProperty}
-          selectedId={selectedProperty?.id}
-        />
-
-        {selectedSubstation && isDiscoveringLand && (
-          <Circle 
-            center={selectedSubstation.coordinates} 
-            radius={1000} 
-            pathOptions={{ 
-              color: '#10b981', 
-              fillColor: '#10b981', 
-              fillOpacity: 0.1, 
-              dashArray: '10, 10',
-              weight: 2,
-              className: 'animate-pulse'
-            }} 
-          />
-        )}
-
-        {rulerPoints.map((point, idx) => (
-          <Marker 
-            key={idx} 
-            position={point} 
-            draggable={rulerActive}
-            eventHandlers={{
-              dragend: (e) => {
-                const marker = e.target;
-                const position = marker.getLatLng();
-                const newPoints = [...rulerPoints];
-                newPoints[idx] = [position.lat, position.lng];
-                setRulerPoints(newPoints);
-                if (newPoints.length === 2) {
-                  const d = calculateDistance(newPoints[0][0], newPoints[0][1], newPoints[1][0], newPoints[1][1]);
-                  setDistance(d);
-                }
-              }
-            }}
-            icon={L.divIcon({
-              className: 'ruler-marker',
-              html: `<div class="w-4 h-4 bg-white border-2 border-slate-900 rounded-full shadow-lg hover:scale-125 transition-transform cursor-move"></div>`,
-              iconSize: [16, 16],
-              iconAnchor: [8, 8]
-            })} 
+        {/* Existing Substations */}
+        {substations.map(sub => (
+          <SubstationMarker 
+            key={sub.id} 
+            substation={sub} 
+            isSelected={selectedSubstation?.id === sub.id}
+            onSelect={onSelectSubstation}
           />
         ))}
 
-        {rulerPoints.length === 2 && (
-          <>
-            <Polyline positions={rulerPoints} color="#0f172a" weight={2} dashArray="8, 12" />
-            <Marker 
-              position={[
-                (rulerPoints[0][0] + rulerPoints[1][0]) / 2,
-                (rulerPoints[0][1] + rulerPoints[1][1]) / 2
-              ]}
-              icon={L.divIcon({
-                className: 'distance-label',
-                html: `
-                  <div class="flex items-center justify-center pointer-events-none">
-                    <div class="bg-slate-900 text-white px-4 py-2 rounded-2xl shadow-2xl text-[12px] font-black italic whitespace-nowrap border border-white/20 flex items-center gap-2 transform -translate-y-8">
-                      <div class="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
-                      ${distance! < 1000 ? `${distance!.toFixed(1)}m` : `${(distance! / 1000).toFixed(2)}km`}
-                    </div>
-                  </div>
-                `,
-                iconSize: [200, 40],
-                iconAnchor: [100, 20]
-              })}
-            />
-          </>
+        {/* Existing Properties */}
+        {properties.map(p => {
+            const distInfo = propertyDistances.find(d => d.property.id === p.id);
+            return (
+              <PropertyMarker 
+                key={p.id} 
+                property={p} 
+                isSelected={selectedProperty?.id === p.id}
+                onSelect={onSelectProperty}
+                distanceLabel={distInfo ? `${distInfo.distance.toFixed(1)}km` : undefined}
+                priceLabel={p.financials?.purchasePrice ? `R${(p.financials.purchasePrice / 1000000).toFixed(1)}M` : undefined}
+              />
+            );
+        })}
+
+        {/* Candidate Substations */}
+        {candidateSubstations.map(sub => (
+          <CandidateMarker 
+            key={sub.id}
+            item={sub}
+            isProperty={false}
+            isSelected={false}
+            onAdd={(s) => onAddSubstation?.(s)}
+            onDelete={(id) => onDeleteCandidateSubstation?.(id)}
+          />
+        ))}
+
+        {/* Candidate Properties */}
+        {candidateProperties.map(p => (
+           <CandidateMarker 
+            key={p.id}
+            item={p}
+            isProperty={true}
+            isSelected={false}
+            onAdd={(prop) => onAddProperty?.(prop)}
+            onDelete={(id) => onDeleteCandidateProperty?.(id)}
+          />
+        ))}
+
+        {/* Distance Lines */}
+        {!rulerActive && propertyDistances.map(d => (
+           <Polyline 
+             key={`line-${d.property.id}`}
+             path={[
+               { lat: d.property.coordinates[0], lng: d.property.coordinates[1] },
+               { lat: d.substation.coordinates[0], lng: d.substation.coordinates[1] }
+             ]}
+             strokeColor="#4285F4"
+             strokeOpacity={0.6}
+             strokeWeight={1}
+             clickable={false}
+           />
+        ))}
+
+        {/* Search Accuracy Grid Mask (Simulated radius) */}
+        {selectedSubstation && (
+           <Circle 
+             center={{ lat: selectedSubstation.coordinates[0], lng: selectedSubstation.coordinates[1] }}
+             radius={1000} // 1km target radius
+             fillColor="#4F46E5"
+             fillOpacity={0.05}
+             strokeColor="#4F46E5"
+             strokeOpacity={0.2}
+             strokeWeight={1}
+             editable={false}
+           />
         )}
 
-        <DistanceLines propertyDistances={propertyDistances} rulerActive={rulerActive} />
-
-        <MapEvents />
-      </MapContainer>
-
-      <div className="absolute top-16 left-4 z-[1000] flex flex-col gap-2 items-start" data-html2canvas-ignore="true">
-        <button
-          onClick={() => setSelectedBasemapId(selectedBasemapId === 'satellite' ? 'streets' : 'satellite')}
-          className={cn(
-            "w-11 h-11 flex items-center justify-center rounded-xl shadow-xl transition-all border",
-            selectedBasemapId === 'satellite' ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-          )}
-          title="Quick Toggle Satellite"
-        >
-          <MapIcon className="w-4 h-4" />
-        </button>
-
-        <button
-          onClick={() => setIsLayerPanelOpen(!isLayerPanelOpen)}
-          className={cn(
-            "w-11 h-11 flex items-center justify-center rounded-xl shadow-xl transition-all border",
-            isLayerPanelOpen ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-          )}
-          title="Map Layer Settings"
-        >
-          <Settings2 className="w-4 h-4" />
-        </button>
-
-        {isLayerPanelOpen && (
-          <div className="absolute left-16 top-0 w-80 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in slide-in-from-left-2 duration-300">
-            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Layers className="w-4 h-4 text-indigo-400" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Map Layer Controller</span>
-              </div>
-              <button 
-                onClick={() => setIsLayerPanelOpen(false)}
-                className="p-1 hover:bg-white/20 rounded-lg transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
-              {/* Basemap Selection */}
-              <section>
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 block">Esri Base Maps</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {ESRI_BASEMAPS.map(basemap => (
-                    <button
-                      key={basemap.id}
-                      onClick={() => setSelectedBasemapId(basemap.id)}
-                      className={cn(
-                        "px-3 py-2.5 rounded-xl text-[10px] font-bold transition-all border text-left",
-                        selectedBasemapId === basemap.id 
-                          ? "bg-slate-900 text-white border-slate-900 shadow-lg shadow-slate-200" 
-                          : "bg-slate-50 text-slate-600 border-slate-100 hover:border-slate-300"
-                      )}
-                    >
-                      {basemap.name}
-                    </button>
-                  ))}
-                </div>
-              </section>
-
-              {/* Opacity Controls */}
-              <section className="space-y-4">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Layer Intensity (Opacity)</label>
-                
-                <div className="space-y-3">
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Base Tiles</span>
-                      <span className="text-[10px] font-black text-indigo-600">{Math.round(layerOpacities.base * 100)}%</span>
-                    </div>
-                    <input 
-                      type="range" min="0" max="1" step="0.05"
-                      value={layerOpacities.base}
-                      onChange={(e) => setLayerOpacities(prev => ({ ...prev, base: parseFloat(e.target.value) }))}
-                      className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                    />
-                  </div>
-
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Substations Layer</span>
-                      <span className="text-[10px] font-black text-indigo-600">{Math.round(layerOpacities.substations * 100)}%</span>
-                    </div>
-                    <input 
-                      type="range" min="0" max="1" step="0.05"
-                      value={layerOpacities.substations}
-                      onChange={(e) => setLayerOpacities(prev => ({ ...prev, substations: parseFloat(e.target.value) }))}
-                      className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                    />
-                  </div>
-
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Cadastral / Boundaries</span>
-                      <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => setShowBoundaries(!showBoundaries)}
-                          className={cn("p-1 rounded-md", showBoundaries ? "text-indigo-600" : "text-slate-400")}
-                        >
-                          {showBoundaries ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                        </button>
-                        <span className="text-[10px] font-black text-indigo-600">{Math.round(layerOpacities.cadastre * 100)}%</span>
-                      </div>
-                    </div>
-                    <input 
-                      type="range" min="0" max="1" step="0.05"
-                      value={layerOpacities.cadastre}
-                      onChange={(e) => setLayerOpacities(prev => ({ ...prev, cadastre: parseFloat(e.target.value) }))}
-                      className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                    />
-                  </div>
-
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Building Footprints</span>
-                      <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => setShowStructures(!showStructures)}
-                          className={cn("p-1 rounded-md", showStructures ? "text-indigo-600" : "text-slate-400")}
-                        >
-                          {showStructures ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                        </button>
-                        <span className="text-[10px] font-black text-indigo-600">{Math.round(layerOpacities.buildings * 100)}%</span>
-                      </div>
-                    </div>
-                    <input 
-                      type="range" min="0" max="1" step="0.05"
-                      value={layerOpacities.buildings}
-                      onChange={(e) => setLayerOpacities(prev => ({ ...prev, buildings: parseFloat(e.target.value) }))}
-                      className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                    />
-                  </div>
-                </div>
-              </section>
-
-              <div className="pt-2">
-                <button 
-                  onClick={() => setLayerOpacities({ base: 1.0, substations: 1.0, cadastre: 0.8, buildings: 0.5 })}
-                  className="w-full py-2.5 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  Reset to Defaults
-                </button>
-              </div>
-            </div>
-          </div>
+        {/* Ruler Line */}
+        {rulerActive && rulerPoints.length === 2 && (
+           <Polyline 
+             path={rulerPoints}
+             strokeColor="#EF4444"
+             strokeWeight={3}
+             strokeOpacity={1}
+           />
         )}
+      </Map>
 
-        <div className="h-px w-full max-w-[44px] bg-slate-100 my-1" />
+      {/* UI Overlays */}
+      <div className="absolute top-4 right-4 flex flex-col gap-2 z-50">
+        <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 p-1 flex items-center">
+            <button 
+              onClick={() => setSelectedBasemapId('streets')}
+              className={cn("p-2 rounded-xl transition-all", selectedBasemapId === 'streets' ? "bg-slate-900 text-white shadow-lg" : "text-slate-500 hover:bg-slate-100")}
+              title="Vector Streets"
+            >
+              <MapIcon className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={() => setSelectedBasemapId('hybrid')}
+              className={cn("p-2 rounded-xl transition-all", selectedBasemapId === 'hybrid' ? "bg-slate-900 text-white shadow-lg" : "text-slate-500 hover:bg-slate-100")}
+              title="Sattelite / Google Earth"
+            >
+              <Globe className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={() => setSelectedBasemapId('terrain')}
+              className={cn("p-2 rounded-xl transition-all", selectedBasemapId === 'terrain' ? "bg-slate-900 text-white shadow-lg" : "text-slate-500 hover:bg-slate-100")}
+              title="Terrain View"
+            >
+              <Mountain className="w-5 h-5" />
+            </button>
+        </div>
 
-        <button
+        <button 
+          onClick={() => setIsExportPanelOpen(true)}
+          className="p-3 rounded-2xl shadow-xl border bg-white text-slate-600 border-slate-200 hover:bg-slate-50 flex items-center justify-center transition-all"
+          title="Export Map/Report"
+        >
+          <FileDown className="w-5 h-5" />
+        </button>
+
+        <button 
           onClick={() => onRulerActiveChange(!rulerActive)}
           className={cn(
-            "w-11 h-11 flex items-center justify-center rounded-xl shadow-xl transition-all border",
-            rulerActive ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+            "p-3 rounded-2xl shadow-xl border transition-all flex items-center justify-center",
+            rulerActive ? "bg-red-600 text-white border-red-500 animate-pulse" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
           )}
-          title="Distance Ruler"
+          title="Measurement Tool"
         >
-          <Ruler className="w-4 h-4" />
+          <Scaling className="w-5 h-5" />
         </button>
 
-        <button
-          onClick={() => onFullscreenChange(!isFullscreen)}
-          className="w-11 h-11 flex items-center justify-center bg-white rounded-xl shadow-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-          title="Toggle Fullscreen"
+        <button 
+          onClick={() => {
+            const center = map?.getCenter();
+            if (center) {
+              const url = `https://earth.google.com/web/search/${center.lat()},${center.lng()}`;
+              window.open(url, '_blank');
+            }
+          }}
+          className="p-3 rounded-2xl shadow-xl border bg-white text-slate-600 border-slate-200 hover:bg-slate-50 flex items-center justify-center"
+          title="Open in Google Earth"
         >
-          {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          <Compass className="w-5 h-5" />
         </button>
+      </div>
 
-        <div className="flex flex-col bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden" data-html2canvas-ignore="true">
-          <button
-            onClick={() => mapInstanceRef.current?.zoomIn()}
-            className="w-11 h-11 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors border-b border-slate-100"
-            title="Zoom In"
-          >
-            <Maximize2 className="w-4 h-4 rotate-45 scale-75" />
-          </button>
-          <button
-            onClick={() => mapInstanceRef.current?.zoomOut()}
-            className="w-11 h-11 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors"
-            title="Zoom Out"
-          >
-            <Minimize2 className="w-4 h-4 rotate-45 scale-75" />
-          </button>
-        </div>
-
-        <button
-          onClick={() => setIsSelectingForExport(!isSelectingForExport)}
-          className={cn(
-            "w-11 h-11 flex items-center justify-center rounded-xl shadow-xl transition-all border",
-            isSelectingForExport ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-          )}
-          title="Map Report & Export"
-        >
-          <FileDown className="w-4 h-4" />
-        </button>
-
-        {onDiscoverNearby && (
-          <div className="flex flex-col gap-2">
-            {/* Substation Discovery */}
-            <div className="relative group flex items-center gap-2">
-              <button
-                onClick={() => {
-                  if (isDiscovering) {
-                    onCancelDiscovery?.();
-                  } else if (mapInstanceRef.current) {
-                    const bounds = mapInstanceRef.current.getBounds();
-                    onDiscoverNearby?.({
-                      north: bounds.getNorth(),
-                      south: bounds.getSouth(),
-                      east: bounds.getEast(),
-                      west: bounds.getWest()
-                    });
-                  }
-                }}
-                className={cn(
-                  "w-11 h-11 flex items-center justify-center rounded-xl shadow-xl transition-all border relative",
-                  isDiscovering 
-                    ? "bg-amber-500 text-white border-amber-600 hover:bg-amber-600 shadow-amber-200/50" 
-                    : "bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 active:scale-95"
-                )}
-                title={isDiscovering ? "Stop Searching" : "Discover Nearby Substations"}
-              >
-                {isDiscovering ? (
-                  <X className="w-4 h-4 animate-in fade-in zoom-in duration-300" />
-                ) : (
-                  <Zap className="w-4 h-4" />
-                )}
-                
-                {isDiscovering && (
-                  <span className="absolute left-14 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-lg whitespace-nowrap shadow-2xl pointer-events-none">
-                    Searching Area...
-                  </span>
-                )}
-              </button>
-
-              {isDiscovering && (
-                 <div className="flex flex-col">
-                    <span className="text-[8px] font-black text-amber-600 uppercase tracking-tighter animate-pulse">Live Search</span>
-                 </div>
-              )}
+      {/* Discovery Trigger Overlay */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50">
+        <div className="bg-white/95 backdrop-blur-md px-6 py-4 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] border border-slate-200 flex items-center gap-6 min-w-[400px]">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-black italic text-indigo-600 uppercase tracking-widest mb-1">Discovery Mode</span>
+            <div className="flex items-center gap-2">
+               <Zap className={cn("w-4 h-4", isDiscovering ? "text-indigo-500 animate-pulse" : "text-slate-400")} />
+               <div className="flex flex-col">
+                 <span className="text-sm font-black text-slate-800 tracking-tight leading-none">
+                   {isDiscovering ? 'Scanning for Substations...' : 'Spatial Catalog Explorer'}
+                 </span>
+                 <span className="text-[10px] text-slate-500 font-medium">Verified by Google Maps Platform</span>
+               </div>
             </div>
+          </div>
 
-            {/* Vacant Land Discovery */}
-            {onDiscoverLand && (
-              <div className="relative group flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    if (isDiscoveringLand) {
-                      onCancelDiscovery?.();
-                    } else if (mapInstanceRef.current) {
-                      const bounds = mapInstanceRef.current.getBounds();
-                      onDiscoverLand?.({
-                        north: bounds.getNorth(),
-                        south: bounds.getSouth(),
-                        east: bounds.getEast(),
-                        west: bounds.getWest()
-                      });
-                    }
-                  }}
-                  className={cn(
-                    "w-11 h-11 flex items-center justify-center rounded-xl shadow-xl transition-all border relative overflow-hidden",
-                    isDiscoveringLand 
-                      ? "bg-emerald-500 text-white border-emerald-600 hover:bg-emerald-600 shadow-emerald-200/50" 
-                      : (selectedSubstation 
-                          ? "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700 active:scale-95"
-                          : "bg-white text-slate-300 border-slate-100 cursor-not-allowed group-hover:border-emerald-200")
-                  )}
-                  title={isDiscoveringLand ? "Stop Searching" : (selectedSubstation ? `Find Land near ${selectedSubstation.name}` : "Select a substation first")}
-                >
-                  {isDiscoveringLand ? (
-                    <X className="w-4 h-4 animate-in fade-in zoom-in duration-300" />
-                  ) : (
-                    <Mountain className={cn("w-4 h-4", !selectedSubstation && !isDiscoveringLand && "opacity-40")} />
-                  )}
+          <div className="h-10 w-px bg-slate-200" />
 
-                  {!selectedSubstation && !isDiscoveringLand && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-slate-50/50">
-                       <div className="w-1 h-1 bg-slate-300 rounded-full" />
-                    </div>
-                  )}
-                  
-                  {isDiscoveringLand && (
-                    <span className="absolute left-14 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-lg whitespace-nowrap shadow-2xl pointer-events-none">
-                      Scanning Land...
-                    </span>
-                  )}
-                </button>
-
-                {!selectedSubstation && !isDiscoveringLand && (
-                   <span className="text-[7px] font-black text-slate-400 uppercase tracking-tighter w-16 leading-tight opacity-0 group-hover:opacity-100 transition-opacity">
-                      Select Anchor Substation
-                   </span>
-                )}
-
-                {isDiscoveringLand && (
-                   <div className="flex flex-col">
-                      <span className="text-[8px] font-black text-emerald-600 uppercase tracking-tighter animate-pulse">Live Scanning</span>
-                   </div>
-                )}
-              </div>
-            )}
-            
-            {onClearCandidates && (candidateSubstations.length > 0 || candidateProperties.length > 0) && !isDiscovering && !isDiscoveringLand && (
-              <button
-                onClick={onClearCandidates}
-                className="w-11 h-11 flex items-center justify-center bg-white text-slate-400 hover:text-red-500 rounded-xl shadow-xl transition-all border border-slate-200 hover:border-red-100"
-                title="Clear Discovery Results"
+          <div className="flex gap-2">
+            {!isDiscovering ? (
+              <button 
+                onClick={handleDiscover}
+                className="bg-slate-900 hover:bg-black text-white px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-slate-200"
+              >
+                <Search className="w-4 h-4 text-indigo-400" />
+                Find Substations
+              </button>
+            ) : (
+              <button 
+                onClick={onCancelDiscovery}
+                className="bg-red-50 text-red-600 border border-red-100 px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all hover:bg-red-100"
               >
                 <X className="w-4 h-4" />
+                Cancel
+              </button>
+            )}
+
+            {(candidateSubstations.length > 0 || candidateProperties.length > 0) && (
+              <button 
+                onClick={onClearCandidates}
+                className="bg-white border border-slate-200 text-slate-500 px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2"
+              >
+                <EyeOff className="w-4 h-4" />
+                Clear
               </button>
             )}
           </div>
-        )}
+        </div>
       </div>
 
-      {isSelectingForExport && (
+      {rulerActive && rulerDistance && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50">
+           <div className="bg-red-600 text-white px-4 py-2 rounded-full shadow-2xl font-black text-sm flex items-center gap-3 border-2 border-white/20">
+              <Scaling className="w-4 h-4" />
+              <span>MEASUREMENT: {rulerDistance.toFixed(2)} KM</span>
+              <button onClick={() => setRulerPoints([])} className="hover:bg-red-500 rounded p-0.5">
+                <X className="w-3.5 h-3.5" />
+              </button>
+           </div>
+        </div>
+      )}
+
+      {/* MapDetailsOverlay integrates naturally with the new engine */}
+      <MapDetailsOverlay 
+        property={selectedProperty}
+        substation={selectedSubstation}
+        closestSubstationInfo={selectedProperty ? propertyDistances.find(d => d.property.id === selectedProperty.id) || null : null}
+        isFullscreen={isFullscreen}
+        onCloseProperty={() => onSelectProperty(null as any)}
+        onCloseSubstation={() => onSelectSubstation?.(null as any)}
+        onOpenDetails={onOpenDetails || (() => {})}
+        onDiscoverLand={onDiscoverLand}
+        isDiscoveringLand={isDiscoveringLand}
+      />
+
+      {isExportPanelOpen && (
         <ExportSelectionOverlay 
           properties={properties}
-          onClose={() => setIsSelectingForExport(false)}
-          onExport={handleExportToPDF}
-          onExportImage={handleExportAsImage}
+          onClose={() => setIsExportPanelOpen(false)}
+          onExport={handleExportPDF}
+          onExportImage={handleExportImage}
           isExporting={isExporting}
         />
-      )}
-
-      {(isFullscreen || selectedSubstation) && (
-          <MapDetailsOverlay 
-            property={isFullscreen ? selectedProperty : null}
-            substation={selectedSubstation}
-            closestSubstationInfo={propertyDistances.find(pd => pd.property.id === selectedProperty?.id)}
-            isFullscreen={isFullscreen}
-            onCloseProperty={() => onSelectProperty(null as any)}
-            onCloseSubstation={() => onSelectSubstation?.(null as any)}
-            onOpenDetails={onOpenDetails!}
-            onDiscoverLand={(sub) => {
-              if (mapInstanceRef.current) {
-                const bounds = mapInstanceRef.current.getBounds();
-                onDiscoverLand?.({
-                  north: bounds.getNorth(),
-                  south: bounds.getSouth(),
-                  east: bounds.getEast(),
-                  west: bounds.getWest()
-                });
-              }
-            }}
-            isDiscoveringLand={isDiscoveringLand}
-            data-html2canvas-ignore="true"
-          />
-      )}
-
-      {rulerActive && distance !== null && (
-        <div 
-          className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[1000] bg-slate-900/90 backdrop-blur-md text-white px-6 py-4 rounded-3xl shadow-2xl border border-white/10 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-5 duration-300"
-          data-html2canvas-ignore="true"
-        >
-           <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/40">
-              <Scaling className="w-5 h-5 text-white" />
-           </div>
-           <div>
-              <p className="text-[9px] font-black text-blue-300 uppercase tracking-[0.2em] leading-none mb-1">Measured Distance</p>
-              <p className="text-2xl font-black italic tracking-tighter">
-                 {distance < 1000 ? `${distance.toFixed(1)} m` : `${(distance / 1000).toFixed(2)} km`}
-              </p>
-           </div>
-           <button 
-             onClick={() => onRulerActiveChange(false)}
-             className="ml-6 p-2.5 hover:bg-white/10 rounded-xl transition-colors text-white/60 hover:text-white border border-white/5"
-           >
-             <X className="w-4 h-4" />
-           </button>
-        </div>
       )}
     </div>
   );
 }
-
-
