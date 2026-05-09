@@ -10,11 +10,22 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // In-memory cache for listing HTML (simple cache to prevent redundant fetches)
+  const listingCache = new Map<string, { html: string; timestamp: number }>();
+  const CACHE_TTL = 1000 * 60 * 15; // 15 minutes cache
+
   // API Routes
   app.get("/api/fetch-listing", async (req, res) => {
     const { url } = req.query;
     if (!url || typeof url !== "string") {
       return res.status(400).json({ error: "URL is required" });
+    }
+
+    // Check cache
+    const cached = listingCache.get(url);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      console.log(`[Proxy] Serving from cache: ${url}`);
+      return res.send(cached.html);
     }
 
     try {
@@ -32,8 +43,6 @@ async function startServer() {
       console.log(`[Proxy] Target response status: ${response.status} for ${url}`);
 
       if (!response.ok) {
-        // If we get an error from the site, return it as a 200 with error info so the client can handle it gracefully
-        // or just return the error status. Returning the actual status is better for debugging.
         return res.status(response.status).json({ 
           error: `The property listing site returned an error (${response.status}).`,
           url: url
@@ -43,15 +52,27 @@ async function startServer() {
       const html = await response.text();
       console.log(`[Proxy] HTML length: ${html.length}`);
       
-      // Basic text extraction to keep payloads manageable for Gemini
-      // Strip scripts, styles, and other heavy non-content tags
+      // Advanced text extraction to keep payloads manageable for Gemini
+      // Strip head, scripts, styles, and other heavy non-content tags
       const cleanedHtml = html
+        .replace(/<head\b[^<]*(?:(?!<\/head>)<[^<]*)*<\/head>/gi, '') // Remove head entirely
         .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
         .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
         .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '')
         .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, '')
-        .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, '');
+        .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, '')
+        .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, '')
+        .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+        .replace(/<form\b[^<]*(?:(?!<\/form>)<[^<]*)*<\/form>/gi, '')
+        .replace(/<!--[\s\S]*?-->/g, '') // Remove comments
+        .replace(/\s\s+/g, ' ') // Collapse whitespace
+        .trim();
 
+      console.log(`[Proxy] Cleaned HTML length: ${cleanedHtml.length}`);
+      
+      // Store in cache
+      listingCache.set(url, { html: cleanedHtml, timestamp: Date.now() });
+      
       res.send(cleanedHtml);
     } catch (error) {
       console.error("[Proxy] Error fetching listing:", error);

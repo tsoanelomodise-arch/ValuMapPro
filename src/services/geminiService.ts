@@ -170,14 +170,17 @@ export async function searchVacantLandByArea(north: number, south: number, east:
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Search for 5-10 actual VACANT LAND, UNIMPROVED PLOT, or FARM listings for sale in South Africa.
+      contents: `Search for 5 actually available VACANT LAND, UNIMPROVED PLOT, or FARM listings for sale in South Africa using:
+      site:property24.com OR site:privateproperty.co.za
+      
       Geographic Focus: Area around Latitude ${north} to ${south} and Longitude ${west} to ${east}.
       
-      CRITICAL: ONLY return vacant land, plots, or agricultural farms. EXCLUDE residential houses, apartments, office buildings, or developed retail space.
+      STRICT FILTERS:
+      1. ONLY vacant land/plots/farms. NO houses/apartments.
+      2. ONLY return listings with a DIRECT URL.
       
-      Look for listings ONLY on Property24 (property24.com) and Private Property (privateproperty.co.za).
-      
-      STRICT URL REQUIREMENT: You MUST provide the full, direct URL to each listing in the 'p24Url' field. Do not make up URLs. If you cannot find a direct link to the listing on Property24 or Private Property, exclude that result.`,
+      Look for metadata in pages that reveal precise GPS coordinates.
+      Return JSON as specified.`,
       config: {
         responseMimeType: "application/json",
         tools: [{ googleSearch: {} }],
@@ -264,16 +267,12 @@ export async function findLandListingLinks(north: number, south: number, east: n
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Search for actual VACANT LAND, UNIMPROVED PLOT, or FARM listings for sale in South Africa near this area:
-      Latitude ${north} to ${south}, Longitude ${west} to ${east}.${substationContext}
+      contents: `Find up to 5 direct property listing URLs for VACANT LAND or FARMS using:
+      site:property24.com OR site:privateproperty.co.za
+      ${north}..${south} latitude, ${west}..${east} longitude${substationContext}
       
-      Focus ONLY on direct listings from Property24 (property24.com) and Private Property (privateproperty.co.za).
-      
-      STRICT URL REQUIREMENT: Return only valid, direct URLs to the property detail pages. Do not return search results pages or homepage links.
-      
-      CRITICAL: EXCLUDE all residential houses, townhouses, apartments, and developed commercial properties. We only want undeveloped land or farms.
-      
-      Return ONLY a JSON object with a 'links' array containing the full URLs for each property found.`,
+      REQUIREMENT: Direct URLs to detail pages only. No search results.
+      EXCLUDE: All developed residential/commercial buildings.`,
       config: {
         responseMimeType: "application/json",
         tools: [{ googleSearch: {} }],
@@ -333,10 +332,10 @@ export async function importPropertyListing(input: string): Promise<Property | n
           
           if (isListing && content.length > 500) {
             console.log(`[AI] Proxy fetch success, content length: ${content.length}`);
-            promptPrefix = `Extract property details from the following South African property listing page content.
+            promptPrefix = `Extract property details from this South African listing page.
             URL: ${input}
             CONTENT:
-            ${content.substring(0, 15000)} // Buffer limit for Gemini
+            ${content.substring(0, 20000)} // Increased limit as we now collapse whitespace
             `;
             tools = []; // Don't need search if we have the content
           } else {
@@ -353,15 +352,12 @@ export async function importPropertyListing(input: string): Promise<Property | n
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `${promptPrefix}
-      Extract to JSON: name, type, description, p24Url, agent(Listing Agent name), agentPhone, address(street, suburb, city, province, country), coordinates[lat, lng], specs(standSize, titleType), financials(price, marketValue).
+      Extract to JSON: name, type, description, p24Url, agent, agentPhone, address, coordinates[lat, lng], specs, financials.
       
-      STRICT REQUIREMENT: This tool is ONLY for VACANT LAND, PLOTS, and FARMS. 
-      The 'p24Url' field MUST contain the full direct URL to the listing on Property24 or Private Property.
-      
-      If the property is a residential house (with bedrooms/bathrooms mentioned as a primary feature), apartment, or office block, DO NOT label it as 'Residential'. 
-      We prefer everything to be classified as either 'Vacant Land' (unimproved) or 'Agricultural' (farms).
-      
-      If it's a Property24 or Private Property listing, find the specific coordinates for that address if possible. COORDINATES ARE OPTIONAL: If the address is obfuscated or coordinates are hard to find, focus on name/price/agent and leave coordinates as null.`,
+      STRICT PROPERTY RULES:
+      1. VACANT LAND/PLOTS/FARMS only.
+      2. If GPS coordinates (latitude/longitude) are mentioned in text, script tags (e.g. google maps markers), or meta tags, EXTRACT THEM ACCURATELY.
+      3. Classification: 'Vacant Land' (unimproved) vs 'Agricultural' (farms).`,
       config: {
         responseMimeType: "application/json",
         tools: tools,

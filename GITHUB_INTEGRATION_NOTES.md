@@ -25,3 +25,5 @@ This file tracks the production-ready state of PropScope and any integration req
   - Enhanced substation modals (Edit, Review, and Map Overlay) with explicit GPS coordinates and Google Maps deep-links.
   - Enforced strict Property24 and Private Property URL retrieval in AI search and extraction logic.
   - Dynamically updated UI labels in modals and evaluation dashboards to reflect the specific listing source (Property24 vs Private Property).
+  - Optimized system performance with server-side listing caching (15m TTL) and aggressive HTML cleaning to reduce AI token overhead.
+  - Hardened property discovery accuracy by implementing targeted `site:` search operators for South African listing portals.
