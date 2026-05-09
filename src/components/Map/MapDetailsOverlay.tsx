@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Navigation2, Zap, Home, ArrowRight, User, Phone, Briefcase, Hash, ExternalLink, Mountain } from 'lucide-react';
+import { X, Navigation2, Zap, Home, ArrowRight, User, Phone, Briefcase, Hash, ExternalLink, Mountain, Info } from 'lucide-react';
 import { Property, Substation } from '../../types';
 import { cn } from '../../lib/utils';
 

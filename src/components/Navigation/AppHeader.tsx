@@ -59,7 +59,7 @@ export function AppHeader({
               <MapPin className={cn("absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5", isGeocoding ? "text-blue-500 animate-pulse" : "text-slate-400")} />
               <input 
                 type="text" 
-                placeholder="Find Town/City/Suburb (e.g. Bryanston)" 
+                placeholder="Search Town/Suburb for land..." 
                 className="w-full bg-blue-50/30 border border-blue-100 rounded-lg pl-9 pr-4 py-2 text-[10px] focus:ring-1 focus:ring-blue-600/20 font-bold uppercase tracking-widest outline-none transition-all placeholder:text-slate-400 text-slate-900"
                 value={localLocation}
                 onChange={(e) => setLocalLocation(e.target.value)}

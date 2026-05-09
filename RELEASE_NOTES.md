@@ -28,3 +28,18 @@
   - Integrated AI-powered Geocoding: Uses Gemini 3 Flash to resolve coordinates for any South African location.
   - Enhanced Header UI: Added a dedicated location search bar next to the catalog filter.
   - Refactored Map Controller: Smooth transitions and center overrides for precise geographic navigation.
+
+- **v1.5 (2026-05-09)**: Source Exclusive Discovery.
+  - Restricted Property Discovery to Property24 only: Removed secondary portal integration from automated search prompts.
+  - Optimized AI grounding for P24 listing structures.
+  - Standardized URL extraction to ignore non-P24 candidates during broad spatial catalog scans.
+
+- **v1.6 (2026-05-09)**: Spatial Discovery Precision.
+  - Reduced Property Discovery radius to 1km around selected substations for high-density accuracy.
+  - Visualized Discovery Area: Added a synchronized 1km visual radius ring on the map during land scans.
+  - Maintained Substation Discovery: Kept infrastructure discovery parameters at full regional scale while tightening land search focus.
+
+- **v1.7 (2026-05-09)**: Unified Location & Property Search.
+  - Enhanced Global Search: The location search bar now automatically triggers a property discovery scan for the geocoded area.
+  - Implemented textual property discovery: Users can search for land by suburb or city name, matching the core Property24 user experience.
+  - Added notification feedback: Provides real-time status on geocoding and the number of properties discovered in the target locale.

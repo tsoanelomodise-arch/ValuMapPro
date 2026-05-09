@@ -37,6 +37,7 @@ import {
   importPropertyListing,
   searchSubstationDetails,
   geocodeLocation,
+  searchVacantLandByLocationName,
   AISubstation 
 } from './services/geminiService';
 import { cn } from './lib/utils';
@@ -208,11 +209,31 @@ export default function App() {
       const result = await geocodeLocation(location);
       if (result && result.coordinates) {
         setMapCenter(result.coordinates);
-        addNotification(`Moved to ${result.name} (${result.type || 'Location'})`, 'info');
+        addNotification(`Geocoded ${result.name}. Searching for Properties...`, 'info');
         
         // Optionally clear selection so the map uses mapCenter
         setSelectedProperty(null);
         setSelectedSubstation(null);
+
+        // Trigger Property Discovery by Name
+        const foundLand = await searchVacantLandByLocationName(location);
+        if (foundLand.length > 0) {
+          setCandidateProperties(prev => {
+            const existingUrls = new Set(prev.map(p => p.p24Url));
+            const newProps = foundLand
+              .filter(p => !existingUrls.has(p.p24Url))
+              .map(p => ({
+                ...p,
+                id: `candidate-land-${Math.random().toString(36).slice(2, 11)}`,
+                status: 'Candidate',
+                discoveryDate: new Date().toISOString()
+              })) as Property[];
+            return [...newProps, ...prev];
+          });
+          addNotification(`Discovered ${foundLand.length} properties in ${result.name}`, 'success');
+        } else {
+          addNotification(`Geocoded ${result.name} but no direct listings found.`, 'info');
+        }
       } else {
         addNotification(`Could not find location: ${location}`, 'error');
       }
@@ -221,7 +242,7 @@ export default function App() {
     } finally {
       setIsGeocoding(false);
     }
-  }, [addNotification]);
+  }, [addNotification, setCandidateProperties]);
 
   // Memoized filtered data for efficiency
   const filteredProperties = useMemo(() => 
