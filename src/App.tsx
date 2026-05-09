@@ -1077,11 +1077,13 @@ export default function App() {
                     }
                     if (substationToDelete) {
                       setSubstations(prev => prev.filter(s => s.id !== substationToDelete));
+                      setCandidateSubstations(prev => prev.filter(s => s.id !== substationToDelete));
                       setSubstationToDelete(null);
                       setSelectedSubstation(null);
                     }
                     if (substationsToDelete) {
                       setSubstations(prev => prev.filter(s => !substationsToDelete.includes(s.id)));
+                      setCandidateSubstations(prev => prev.filter(s => !substationsToDelete.includes(s.id)));
                       setSubstationsToDelete(null);
                       if (selectedSubstation && substationsToDelete.includes(selectedSubstation.id)) {
                         setSelectedSubstation(null);

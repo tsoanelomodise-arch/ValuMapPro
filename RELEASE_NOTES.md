@@ -8,6 +8,7 @@
   - Optimized map export functionality for Google Maps canvas rendering.
   - Fixed coordinate validation and discovery bounds for 1km proximity accuracy.
   - Added persistent close/dismiss button to Discovery Mode overlay.
+  - Fixed substation multi-select deletion bug where discovered (candidate) stations were not being properly removed from the spatial index.
 
 - **v1.1 (2026-05-09)**: AI Infrastructure Hardening.
   - Upgraded server-side AI to `@google/generative-ai` for improved reliability.
