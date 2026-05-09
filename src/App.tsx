@@ -40,10 +40,7 @@ import SubstationEditModal from './components/Modals/SubstationEditModal';
 import SubstationAddForm from './components/Modals/SubstationAddForm';
 import { UserGuideModal } from './components/Modals/UserGuideModal';
 
-import { APIProvider } from '@vis.gl/react-google-maps';
-
 export default function App() {
-  const API_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || "";
   const [properties, setProperties] = usePersistedState<Property[]>('propscope_properties', mockProperties);
   const [substations, setSubstations] = usePersistedState<Substation[]>('propscope_substations', [
     {
@@ -351,13 +348,12 @@ export default function App() {
   }, [pendingSubstation, substations, isDuplicateWarningOpen, setSubstations]);
 
   return (
-    <APIProvider apiKey={API_KEY} version="weekly">
-      <div 
-        className="flex h-screen bg-slate-50 font-sans text-slate-700 overflow-hidden selection:bg-blue-100 selection:text-blue-900"
-        onClick={() => {
-          if (isRulerActive) setIsRulerActive(false);
-        }}
-      >
+    <div 
+      className="flex h-screen bg-slate-50 font-sans text-slate-700 overflow-hidden selection:bg-blue-100 selection:text-blue-900"
+      onClick={() => {
+        if (isRulerActive) setIsRulerActive(false);
+      }}
+    >
       <Sidebar 
         isOpen={isSidebarOpen}
         view={view as any}
@@ -1151,8 +1147,7 @@ export default function App() {
           </div>
         ))}
       </div>
-     </div>
-    </APIProvider>
+    </div>
   );
 }
 

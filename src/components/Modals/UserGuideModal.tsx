@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Zap, Map as MapIcon, Import, Ruler, Info, Shield, MousePointer2, ExternalLink, Mountain, Search, Bell } from 'lucide-react';
+import { X, Zap, Map as MapIcon, Import, Ruler, Info, Shield, MousePointer2, ExternalLink, Mountain, Search, Bell, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface UserGuideModalProps {
@@ -41,6 +41,37 @@ export function UserGuideModal({ onClose }: UserGuideModalProps) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
+          {/* System Overview */}
+          <section className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100/50">
+            <h3 className="text-xs font-black text-blue-700 uppercase tracking-widest mb-3 flex items-center gap-2">
+              <Shield className="w-3.5 h-3.5" /> Platform Intelligence
+            </h3>
+            <p className="text-sm font-medium text-slate-700 leading-relaxed mb-4">
+              PropScope is an advanced spatial evaluation system specifically engineered for 
+              South African electrical and solar infrastructure planning.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex gap-3">
+                <div className="p-2 bg-white rounded-xl shadow-sm h-fit">
+                  <Search className="w-4 h-4 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-900 mb-1">AI Grounding</p>
+                  <p className="text-[11px] text-slate-500 leading-tight">Gemini AI cross-references property listings with real infrastructure records.</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <div className="p-2 bg-white rounded-xl shadow-sm h-fit">
+                  <Globe className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-900 mb-1">Spatial Precision</p>
+                  <p className="text-[11px] text-slate-500 leading-tight">Every point is verified against multiple satellite imagery sources and regional topography.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* Core Navigation & Search */}
           <section>
             <h3 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -131,7 +162,7 @@ export function UserGuideModal({ onClose }: UserGuideModalProps) {
               <div className="text-sm">
                 <p className="font-bold text-slate-800 mb-1">Mirror Link & Coordinates</p>
                 <p className="text-slate-500 leading-relaxed">
-                  When editing a record, updating <b>Coordinates</b> will automatically update the <b>Google Maps Link</b>. 
+                  When editing a record, updating <b>Coordinates</b> will automatically update the <b>Location Links</b>. 
                   Alternatively, pasting a Maps Link will instantly extract and update the coordinates.
                 </p>
               </div>

@@ -59,3 +59,16 @@
   - Enhanced Global Search: The location search bar now automatically triggers a property discovery scan for the geocoded area.
   - Implemented textual property discovery: Users can search for land by suburb or city name, matching the core Property24 user experience.
   - Added notification feedback: Provides real-time status on geocoding and the number of properties discovered in the target locale.
+
+- **v1.9 (2026-05-11)**: User Intelligence & Documentation.
+  - Enhanced User Guide: Implemented a detailed system overview section describing the platform's focus on South African infrastructure planning and AI-grounded spatial precision.
+  - Strategic Descriptions: Added clear definitions for "AI Grounding" and "Spatial Precision" within the help system to improve user onboarding.
+  - Persistent UI Controls: Added a dismissable close button to the Discovery Mode overlay to allow for cleaner map visualization during spatial analysis.
+  - Fixed regression where the `Globe` icon was not imported in the User Guide modal.
+
+- **v2.0 (2026-05-11)**: Spatial Engine Restoration.
+  - Reverted the map engine to Leaflet (OpenStreetMap) to ensure stability and cross-platform reliability.
+  - Re-implemented high-performance Marker, Polyline, and Circle components using `react-leaflet`.
+  - Optimized viewport handling: Resolved "gray tile" and rendering issues during structural index resizing.
+  - Retained advanced features: Ruler measuring, 1km discovery radius visualization, and Earth View integrations remain functional within the restored engine.
+  - Removed dependency on Google Maps Platform API keys to prevent service interruptions.
