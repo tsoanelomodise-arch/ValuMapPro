@@ -11,6 +11,13 @@ This project is a professional property evaluation tool for solar/electrical inf
 ## Environment Variables
 - `GEMINI_API_KEY`: Required for AI search and data extraction.
 
-## Critical UX Patterns
-- **Sliding Panels**: The `SpatialCatalog` uses a width-based transition. Do not use `transform: translateX` if accurate bounds calculations are needed on the map during the animation.
-- **Substation Search**: Uses Gemini with the `googleSearch` tool. Be descriptive in prompts to get specific kV/MVA ratings.
+## Agent Update Rules
+- **Maintenance Log**: Every time you perform significant refactors or add features, you MUST append a new entry to the `RELEASE_NOTES.md` file (or equivalent) to maintain a transparent record of the system evolution.
+- **Lock Down**: This system's core map and coordinate handling are in a "Locked" state. Major deviations from the `MapComponent.tsx` architecture require explicit justification.
+
+## Release History
+- **v1.0 (2026-05-09)**: Initial System Lockdown. 
+  - Fixed Leaflet "center/zoom" initialization racing errors.
+  - Restricted AI Discovery tools to Vacant Land, Plots, and Farms.
+  - Implemented Wide/Narrow toggle for Spatial Catalog.
+  - Added coordinate validation safeguards.
