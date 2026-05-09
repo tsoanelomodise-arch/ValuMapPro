@@ -18,6 +18,7 @@ export interface Property {
     country: string;
   };
   coordinates: [number, number];
+  coordinatesFlag?: 'precise' | 'approximate';
   specs: {
     standSize: number;
     titleType: 'Sectional title' | 'Full title';

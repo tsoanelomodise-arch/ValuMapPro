@@ -58,6 +58,16 @@ export default function MapDetailsOverlay({
             onClick={() => onOpenDetails(property)}
           >
             <div className="space-y-2.5">
+              {/* Location Accuracy Warning */}
+              {property.coordinatesFlag === 'approximate' && (
+                <div className="mb-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2 shadow-sm">
+                  <Info className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-[9px] text-amber-700 font-bold leading-tight uppercase tracking-tight">
+                    Approximate Location: Precisely mapped coordinates were unavailable. Location is estimated based on the search area.
+                  </p>
+                </div>
+              )}
+
               {/* External Listing Link - High Visibility */}
               {property.p24Url && (
                 <div className="mb-2">
@@ -69,7 +79,7 @@ export default function MapDetailsOverlay({
                     onClick={(e) => e.stopPropagation()}
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
-                    View {property.p24Url.includes('privateproperty') ? 'Private Property' : 'Property24'} Listing
+                    View {property.p24Url?.includes('privateproperty') ? 'Private Property' : 'Property24'} Listing
                   </a>
                 </div>
               )}
@@ -118,16 +128,20 @@ export default function MapDetailsOverlay({
                       <div className="mt-1 w-1 h-1 rounded-full bg-slate-400 shrink-0" />
                       <div className="flex flex-wrap gap-x-2 gap-y-0.5">
                         <span className="font-bold text-slate-500 uppercase tracking-tighter text-[9px]">Ref No:</span>
-                        <a 
-                          href={property.p24Url || (property.listingNumber ? `https://www.property24.com/for-sale/${property.address.suburb.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${property.address.city.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${property.listingNumber}` : '#')}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-slate-900 font-bold hover:text-blue-600 hover:underline cursor-pointer flex items-center gap-1"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {property.listingNumber || 'Direct Link'}
-                          <ExternalLink className="w-2.5 h-2.5" />
-                        </a>
+                        {property.p24Url ? (
+                          <a 
+                            href={property.p24Url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-slate-900 font-bold hover:text-blue-600 hover:underline cursor-pointer flex items-center gap-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {property.listingNumber || 'Source Link'}
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        ) : (
+                          <span className="text-slate-900 font-bold">{property.listingNumber}</span>
+                        )}
                       </div>
                     </div>
                   )}

@@ -177,6 +177,7 @@ interface MapComponentProps {
   onOpenDetails?: (property: Property) => void;
   isFullscreen: boolean;
   onFullscreenChange: (fullscreen: boolean) => void;
+  mapCenterOverride?: [number, number] | null;
 }
 
 // Memoized Distance Lines for performance and stability
@@ -523,7 +524,8 @@ export default function MapComponent({
   onCancelDiscovery,
   onClearCandidates,
   isDiscovering = false,
-  isDiscoveringLand = false
+  isDiscoveringLand = false,
+  mapCenterOverride
 }: MapComponentProps) {
   const [isSearchingArea, setIsSearchingArea] = useState(false);
   const [currentMapName, setCurrentMapName] = useState<string | null>(null);
@@ -648,6 +650,9 @@ export default function MapComponent({
 
   // Determine stable coordinates for map centering
   const targetCenter = React.useMemo(() => {
+    if (mapCenterOverride && isValidCoord(mapCenterOverride)) {
+        return mapCenterOverride;
+    }
     if (selectedProperty && isValidCoord(selectedProperty.coordinates)) {
       return selectedProperty.coordinates;
     }
@@ -655,7 +660,7 @@ export default function MapComponent({
       return selectedSubstation.coordinates;
     }
     return null;
-  }, [selectedProperty, selectedSubstation]);
+  }, [selectedProperty, selectedSubstation, mapCenterOverride]);
 
   // Initial center should only be computed once to prevent jumping on data updates
   const [initialCenter] = useState<[number, number]>(() => {

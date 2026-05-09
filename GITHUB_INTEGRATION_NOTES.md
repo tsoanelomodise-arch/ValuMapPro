@@ -27,3 +27,6 @@ This file tracks the production-ready state of PropScope and any integration req
   - Dynamically updated UI labels in modals and evaluation dashboards to reflect the specific listing source (Property24 vs Private Property).
   - Optimized system performance with server-side listing caching (15m TTL) and aggressive HTML cleaning to reduce AI token overhead.
   - Hardened property discovery accuracy by implementing targeted `site:` search operators for South African listing portals.
+  - Migrated all AI discovery and extraction logic to the Express backend to ensure 100% reliability in production/deployed environments by leveraging server-side environment variables.
+  - Hardened AI response parsing with a robust `extractJson` helper and streamlined model integration using the latest `@google/generative-ai` SDK.
+  - Standardized AI search grounding to use `gemini-3-flash-preview` with broad-regional fallback logic for better substation coverage in South African metros.

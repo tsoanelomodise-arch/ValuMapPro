@@ -36,6 +36,7 @@ import {
   findLandListingLinks,
   importPropertyListing,
   searchSubstationDetails,
+  geocodeLocation,
   AISubstation 
 } from './services/geminiService';
 import { cn } from './lib/utils';
@@ -129,6 +130,8 @@ export default function App() {
   const [candidateProperties, setCandidateProperties] = usePersistedState<Property[]>('propscope_candidate_properties', []);
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [isDiscoveringLand, setIsDiscoveringLand] = useState(false);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
   const [discoveryProgress, setDiscoveryProgress] = useState<{ current: number, total: number } | null>(null);
   const [notifications, setNotifications] = useState<{ id: string, message: string, type: 'success' | 'error' | 'info' }[]>([]);
   const discoveryAbortControllerRef = React.useRef<AbortController | null>(null);
@@ -198,6 +201,27 @@ export default function App() {
     setSelectedProperty(property);
     setIsDetailOpen(true);
   }, []);
+
+  const handleLocationSearch = useCallback(async (location: string) => {
+    setIsGeocoding(true);
+    try {
+      const result = await geocodeLocation(location);
+      if (result && result.coordinates) {
+        setMapCenter(result.coordinates);
+        addNotification(`Moved to ${result.name} (${result.type || 'Location'})`, 'info');
+        
+        // Optionally clear selection so the map uses mapCenter
+        setSelectedProperty(null);
+        setSelectedSubstation(null);
+      } else {
+        addNotification(`Could not find location: ${location}`, 'error');
+      }
+    } catch (error) {
+       addNotification(`Search failed: ${location}`, 'error');
+    } finally {
+      setIsGeocoding(false);
+    }
+  }, [addNotification]);
 
   // Memoized filtered data for efficiency
   const filteredProperties = useMemo(() => 
@@ -323,6 +347,7 @@ export default function App() {
               ...res,
               id: `candidate-land-${Date.now()}-${i}`,
               coordinates: finalCoords as [number, number],
+              coordinatesFlag,
               description: coordinatesFlag === 'approximate' 
                 ? `${res.description || ''} (Approximate location based on anchor)`.trim()
                 : res.description,
@@ -489,7 +514,10 @@ export default function App() {
     
     // Extract listing number from URL or validate as numeric
     let finalListingNumber = importValue.trim();
-    if (finalListingNumber.includes('property24.com')) {
+    const isP24 = finalListingNumber.includes('property24.com');
+    const isPrivateProp = finalListingNumber.includes('privateproperty.co.za');
+
+    if (isP24 || isPrivateProp) {
       // Remove query parameters
       const urlWithoutQuery = finalListingNumber.split('?')[0];
       // Split by / and filter out empty strings (trailing slashes)
@@ -498,7 +526,7 @@ export default function App() {
     }
 
     if (!/^\d{5,15}$/.test(finalListingNumber)) {
-      alert("Invalid format. Please enter a Property24 URL or a numeric listing number.");
+      alert("Invalid format. Please enter a Property24/Private Property URL or a numeric listing number.");
       return;
     }
 
@@ -535,13 +563,16 @@ export default function App() {
       newProperty.id = Math.random().toString(36).substr(2, 9);
       newProperty.listingNumber = finalListingNumber;
       
-      // Construct SEO-friendly P24 URL from AI data if not provided
+      // Preserve the original URL if possible, or construct a Property24 one only as fallback for P24-only inputs
       if (!newProperty.p24Url) {
-        const suburbSlug = newProperty.address.suburb.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-        const citySlug = newProperty.address.city.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-        const provinceSlug = (newProperty.address as any).province?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'gauteng';
-        
-        newProperty.p24Url = `https://www.property24.com/for-sale/${suburbSlug}/${citySlug}/${provinceSlug}/${finalListingNumber}`;
+        if (importValue.includes('privateproperty.co.za')) {
+          newProperty.p24Url = importValue;
+        } else {
+          const suburbSlug = newProperty.address.suburb.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+          const citySlug = newProperty.address.city.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+          const provinceSlug = (newProperty.address as any).province?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'gauteng';
+          newProperty.p24Url = `https://www.property24.com/for-sale/${suburbSlug}/${citySlug}/${provinceSlug}/${finalListingNumber}`;
+        }
       }
       
       setPendingProperty(newProperty);
@@ -700,6 +731,8 @@ export default function App() {
           toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
+          onLocationSearch={handleLocationSearch}
+          isGeocoding={isGeocoding}
         />
 
         <div className="flex-1 flex overflow-hidden relative">
@@ -836,6 +869,7 @@ export default function App() {
                         onOpenDetails={handleOpenDetails}
                         isFullscreen={isFullscreen}
                         onFullscreenChange={setIsFullscreen}
+                        mapCenterOverride={mapCenter}
                      />
                    </div>
                  </div>
@@ -1001,7 +1035,7 @@ export default function App() {
                      <span className="w-1.5 h-1.5 bg-blue-600 rounded-full" />
                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em]">External Data Link</span>
                   </div>
-                  <h3 className="text-2xl font-semibold text-slate-900 tracking-tight">Import from Property24</h3>
+                  <h3 className="text-2xl font-semibold text-slate-900 tracking-tight">Import Property Analysis</h3>
                 </div>
                 <button 
                   onClick={(e) => {
@@ -1020,12 +1054,12 @@ export default function App() {
                        <ExternalLink className="w-5 h-5 text-slate-400" />
                     </div>
                     <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                      Enter the Property24 URL or Listing Number. Our system will analyze the baseline and extract regional spatial data.
+                      Enter the Property24 / Private Property URL or Listing Number. Our system will analyze the baseline and extract regional spatial data.
                     </p>
                  </div>
 
                  <div>
-                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">P24 Link or Reference</label>
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">P24 / PP Link or Reference</label>
                     <input 
                       type="text" 
                       placeholder="Paste URL or listing number..."

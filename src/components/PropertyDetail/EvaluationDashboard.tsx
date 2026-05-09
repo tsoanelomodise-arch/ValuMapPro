@@ -149,6 +149,19 @@ export default function EvaluationDashboard({
   return (
     <div className="bg-white h-full overflow-y-auto custom-scrollbar">
       <div className="max-w-4xl mx-auto">
+        {property.coordinatesFlag === 'approximate' && (
+          <div className="mx-8 mt-6 px-4 py-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3 shadow-sm">
+            <div className="p-1.5 bg-amber-100 text-amber-700 rounded-lg">
+               <Info className="w-4 h-4" />
+            </div>
+            <div>
+               <p className="text-[11px] font-black text-amber-900 uppercase tracking-widest mb-0.5">Approximate Geolocation</p>
+               <p className="text-xs text-amber-700 font-medium leading-relaxed">
+                 This property's precise coordinates could not be extracted from the listing. The current location is an estimate. Please verify the physical address on Google Maps before final appraisal.
+               </p>
+            </div>
+          </div>
+        )}
         {/* Header Information */}
         <div className="p-8 border-b border-slate-100">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
@@ -170,7 +183,7 @@ export default function EvaluationDashboard({
                         rel="noopener noreferrer"
                         className="text-[10px] font-bold text-slate-400 hover:text-blue-600 transition-colors uppercase tracking-widest flex items-center gap-1"
                       >
-                        {p24Url.includes('privateproperty') ? 'Private' : 'P24'} <ExternalLink className="w-2.5 h-2.5" />
+                        {p24Url.toLowerCase().includes('privateproperty') ? 'Private Property' : 'Property24'} <ExternalLink className="w-2.5 h-2.5" />
                       </a>
                     )}
 
@@ -292,6 +305,9 @@ export default function EvaluationDashboard({
                       >
                         {item.val}
                         <ExternalLink className="w-4 h-4" />
+                        <span className="text-[8px] font-black uppercase tracking-tighter text-slate-400 no-underline">
+                          ({p24Url?.toLowerCase().includes('privateproperty') ? 'PP' : 'P24'})
+                        </span>
                       </a>
                     ) : (
                       <p className="text-lg font-bold text-slate-900">{item.val}</p>
