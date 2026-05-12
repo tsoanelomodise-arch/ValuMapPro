@@ -12,7 +12,7 @@ interface UseImportProps {
   setSubstations: React.Dispatch<React.SetStateAction<Substation[]>>;
   setView: (v: 'map' | 'list') => void;
   setIsImportModalOpen: (o: boolean) => void;
-  setIsSubstationModalOpen: (o: boolean) => void;
+  setIsSubstationSearchOpen: (o: boolean) => void;
   addNotification: (message: string, type?: 'success' | 'error' | 'info') => void;
 }
 
@@ -23,7 +23,7 @@ export function useImport({
   setSubstations,
   setView,
   setIsImportModalOpen,
-  setIsSubstationModalOpen,
+  setIsSubstationSearchOpen,
   addNotification
 }: UseImportProps) {
   const [isImporting, setIsImporting] = useState(false);
@@ -37,8 +37,8 @@ export function useImport({
     }
     setIsImporting(false);
     setIsImportModalOpen(false);
-    setIsSubstationModalOpen(false);
-  }, [setIsImportModalOpen, setIsSubstationModalOpen]);
+    setIsSubstationSearchOpen(false);
+  }, [setIsImportModalOpen, setIsSubstationSearchOpen]);
 
   const handleImportProperty = useCallback(async (value: string) => {
     if (!value) return;
@@ -138,10 +138,10 @@ export function useImport({
 
       if (multipleSubs) {
         setSubstations(prev => [...multipleSubs!, ...prev]);
-        setIsSubstationModalOpen(false);
+        setIsSubstationSearchOpen(false);
       } else if (candidateSub) {
         setPendingSubstation(candidateSub);
-        setIsSubstationModalOpen(false);
+        setIsSubstationSearchOpen(false);
       }
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return;
@@ -153,7 +153,7 @@ export function useImport({
         importAbortControllerRef.current = null;
       }
     }
-  }, [setSubstations, setIsSubstationModalOpen, setPendingSubstation, addNotification]);
+  }, [setSubstations, setIsSubstationSearchOpen, setPendingSubstation, addNotification]);
 
   return {
     isImporting,

@@ -6,6 +6,7 @@ import { Property, Substation, PROPERTY_TYPE_COLORS, SUBSTATION_COLOR } from '..
 import { 
   X, 
   Zap, 
+  Plus,
   Maximize2, 
   Minimize2, 
   Scaling,
@@ -21,6 +22,7 @@ import {
 import { cn, calculateDistance } from '../../lib/utils';
 import MapDetailsOverlay from './MapDetailsOverlay';
 import ExportSelectionOverlay from './ExportSelectionOverlay';
+import SubstationSearchPanel from './SubstationSearchPanel';
 
 // Fix for default marker icons
 // @ts-ignore
@@ -64,6 +66,8 @@ interface MapComponentProps {
   isFullscreen: boolean;
   onFullscreenChange: (fullscreen: boolean) => void;
   mapCenterOverride?: [number, number] | null;
+  isSubstationSearchOpen?: boolean;
+  onSubstationSearchClose?: () => void;
 }
 
 // Map Event handlers for Leaflet
@@ -113,11 +117,27 @@ export default function MapComponent(props: MapComponentProps) {
     isDiscovering,
     isDiscoveringLand,
     discoveryProgress,
-    mapCenterOverride
+    mapCenterOverride,
+    isSubstationSearchOpen = false,
+    onSubstationSearchClose
   } = props;
 
   const [selectedBasemapId, setSelectedBasemapId] = useState<'streets' | 'satellite' | 'terrain' | 'hybrid'>('streets');
   const [isExportPanelOpen, setIsExportPanelOpen] = useState(false);
+  const [isSearchPanelOpen, setIsSearchPanelOpen] = useState(false);
+
+  // Sync with prop if it changes
+  useEffect(() => {
+    if (isSubstationSearchOpen) {
+      setIsSearchPanelOpen(true);
+    }
+  }, [isSubstationSearchOpen]);
+
+  // Notify parent when closed locally
+  const handleCloseSearch = () => {
+    setIsSearchPanelOpen(false);
+    onSubstationSearchClose?.();
+  };
   const [rulerPoints, setRulerPoints] = useState<[number, number][]>([]);
   const [rulerDistance, setRulerDistance] = useState<number | null>(null);
   const [showDiscoveryOverlay, setShowDiscoveryOverlay] = useState(true);
@@ -266,6 +286,21 @@ export default function MapComponent(props: MapComponentProps) {
 
   return (
     <div className="relative w-full h-full rounded-2xl overflow-hidden shadow-sm border border-slate-200">
+      {isSearchPanelOpen && (
+        <SubstationSearchPanel 
+          onAdd={onAddSubstation ? (data) => {
+            if (data.payload) {
+              if (Array.isArray(data.payload)) {
+                data.payload.forEach(s => onAddSubstation(s));
+              } else {
+                onAddSubstation(data.payload);
+              }
+            }
+          } : () => {}}
+          onClose={handleCloseSearch}
+          isSubmitting={false}
+        />
+      )}
       <MapContainer 
         center={initialCenter} 
         zoom={13} 
@@ -525,13 +560,23 @@ export default function MapComponent(props: MapComponentProps) {
 
           <div className="flex gap-2">
             {!isDiscovering ? (
-              <button 
-                onClick={handleDiscover}
-                className="bg-slate-900 hover:bg-black text-white px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-slate-200"
-              >
-                <Search className="w-4 h-4 text-indigo-400" />
-                Find Substations
-              </button>
+              <div className="flex gap-2">
+                <button 
+                  onClick={handleDiscover}
+                  className="bg-slate-900 hover:bg-black text-white px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-slate-200"
+                  title="Scan map area"
+                >
+                  <Search className="w-4 h-4 text-indigo-400" />
+                  Scanner
+                </button>
+                <button 
+                  onClick={() => setIsSearchPanelOpen(true)}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-indigo-200"
+                >
+                  <Plus className="w-4 h-4" />
+                  Search By Name
+                </button>
+              </div>
             ) : (
               <button 
                 onClick={onCancelDiscovery}

@@ -36,7 +36,6 @@ import { useDiscovery } from './hooks/useDiscovery';
 import { useImport } from './hooks/useImport';
 
 import SubstationEditModal from './components/Modals/SubstationEditModal';
-import SubstationAddForm from './components/Modals/SubstationAddForm';
 import { UserGuideModal } from './components/Modals/UserGuideModal';
 
 export default function App() {
@@ -56,7 +55,7 @@ export default function App() {
   const [propertyToDelete, setPropertyToDelete] = useState<string | null>(null);
   const [propertiesToDelete, setPropertiesToDelete] = useState<string[] | null>(null);
   const [substationsToDelete, setSubstationsToDelete] = useState<string[] | null>(null);
-  const [isSubstationModalOpen, setIsSubstationModalOpen] = useState(false);
+  const [isSubstationSearchOpen, setIsSubstationSearchOpen] = useState(false);
   const [isSpatialPanelOpen, setIsSpatialPanelOpen] = usePersistedState('is-spatial-panel-open', true);
   const [isSpatialPanelWide, setIsSpatialPanelWide] = usePersistedState('is-spatial-panel-wide', false);
   const [substationToEdit, setSubstationToEdit] = useState<Substation | null>(null);
@@ -104,7 +103,7 @@ export default function App() {
     setSubstations,
     setView,
     setIsImportModalOpen,
-    setIsSubstationModalOpen,
+    setIsSubstationSearchOpen,
     addNotification
   });
 
@@ -326,7 +325,7 @@ export default function App() {
       setSubstations(prev => [pendingSubstation, ...prev]);
       setPendingSubstation(null);
       setIsDuplicateWarningOpen(false);
-      setIsSubstationModalOpen(false);
+      setIsSubstationSearchOpen(false);
     }
   }, [pendingSubstation, substations, isDuplicateWarningOpen, setSubstations]);
 
@@ -348,7 +347,10 @@ export default function App() {
           }}
           onCategoryChange={setActiveCategory}
           onImportProperty={() => setIsImportModalOpen(true)}
-          onAddSubstation={() => setIsSubstationModalOpen(true)}
+          onAddSubstation={() => {
+            setView('map');
+            setIsSubstationSearchOpen(true);
+          }}
           onRestoreDefaults={handleClearCatalog}
           onShowUserGuide={() => setIsUserGuideOpen(true)}
         />
@@ -503,6 +505,8 @@ export default function App() {
                           setCandidateSubstations([]);
                           setCandidateProperties([]);
                         }}
+                        isSubstationSearchOpen={isSubstationSearchOpen}
+                        onSubstationSearchClose={() => setIsSubstationSearchOpen(false)}
                         isDiscovering={isDiscovering}
                         isDiscoveringLand={isDiscoveringLand}
                         discoveryProgress={discoveryProgress}
@@ -727,49 +731,6 @@ export default function App() {
                    )}
                  </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isSubstationModalOpen && (
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6">
-          <div 
-            onClick={handleCancelImport}
-            className="absolute inset-0 bg-slate-900/60"
-          />
-          <div 
-            className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden relative z-10 border border-slate-200"
-          >
-            <div className="p-8">
-              <div className="flex justify-between items-start mb-8">
-                <div>
-                  <div className="flex items-center gap-2 mb-1.5">
-                     <span className="w-1.5 h-1.5 bg-blue-600 rounded-full" />
-                     <span className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em]">Infrastructure Analysis</span>
-                  </div>
-                  <h3 className="text-2xl font-semibold text-slate-900 tracking-tight">Add Substation</h3>
-                </div>
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCancelImport();
-                  }} 
-                  className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-400"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <SubstationAddForm 
-                onAdd={handleAddSubstation} 
-                onShowCandidates={(candidates) => {
-                  setCandidateSubstations(candidates);
-                  setIsSubstationModalOpen(false);
-                  setView('map');
-                }}
-                isSubmitting={isImporting} 
-              />
             </div>
           </div>
         </div>
