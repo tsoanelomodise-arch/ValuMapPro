@@ -1,6 +1,6 @@
 import React from 'react';
-import { Property, Substation, PROPERTY_TYPE_COLORS } from '../../types';
-import { MapPin, Zap, ArrowUpRight, Search, Trash2 } from 'lucide-react';
+import { Property, Substation, PROPERTY_TYPE_COLORS, PropertyType } from '../../types';
+import { MapPin, Zap, ArrowUpRight, Search, Trash2, Filter } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface SpatialCatalogProps {
@@ -18,6 +18,8 @@ interface SpatialCatalogProps {
   onSelectSubstation: (substation: Substation) => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
+  selectedPropertyTypes: PropertyType[];
+  setSelectedPropertyTypes: (types: PropertyType[]) => void;
 }
 
 export function SpatialCatalog({
@@ -34,8 +36,20 @@ export function SpatialCatalog({
   onOpenDetails,
   onSelectSubstation,
   searchQuery,
-  setSearchQuery
+  setSearchQuery,
+  selectedPropertyTypes,
+  setSelectedPropertyTypes
 }: SpatialCatalogProps) {
+  const propertyTypes: PropertyType[] = ['Residential', 'Commercial', 'Industrial', 'Agricultural', 'Vacant Land'];
+
+  const togglePropertyType = (type: PropertyType) => {
+    if (selectedPropertyTypes.includes(type)) {
+      setSelectedPropertyTypes(selectedPropertyTypes.filter(t => t !== type));
+    } else {
+      setSelectedPropertyTypes([...selectedPropertyTypes, type]);
+    }
+  };
+
   return (
     <div 
       className="w-full h-full bg-white border-r border-slate-200 z-10 flex flex-col shadow-lg"
@@ -47,7 +61,8 @@ export function SpatialCatalog({
          </div>
          <h3 className="text-sm font-black text-slate-900 tracking-tight italic uppercase">Spatial Catalog</h3>
       </div>
-      <div className="p-2 border-b border-slate-100">
+      
+      <div className="p-2 border-b border-slate-100 space-y-2">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
           <input 
@@ -55,8 +70,36 @@ export function SpatialCatalog({
             placeholder="Search catalog..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-100 rounded-lg pl-9 pr-3 py-2 text-[10px] font-bold uppercase tracking-widest outline-none focus:ring-1 focus:ring-blue-500/20 transition-all"
+            className="w-full bg-slate-50 border border-slate-100 rounded-xl pl-9 pr-3 py-2.5 text-[10px] font-bold uppercase tracking-widest outline-none focus:ring-1 focus:ring-blue-500/20 transition-all shadow-sm"
           />
+        </div>
+
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {propertyTypes.map(type => {
+            const isSelected = selectedPropertyTypes.includes(type);
+            return (
+              <button
+                key={type}
+                onClick={() => togglePropertyType(type)}
+                className={cn(
+                  "px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all border shrink-0",
+                  isSelected 
+                    ? "bg-slate-900 text-white border-slate-900 shadow-sm" 
+                    : "bg-white text-slate-500 border-slate-200 hover:border-slate-300"
+                )}
+              >
+                {type}
+              </button>
+            );
+          })}
+          {selectedPropertyTypes.length > 0 && (
+            <button
+              onClick={() => setSelectedPropertyTypes([])}
+              className="px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all border border-transparent text-red-500 hover:bg-red-50"
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
       <div className="flex-1 overflow-y-auto custom-scrollbar p-2">

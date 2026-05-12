@@ -288,19 +288,26 @@ export async function findLandListingLinks(north: number, south: number, east: n
 }
 
 export async function importPropertyListing(input: string): Promise<Property | null> {
-  const isP24SA = input.includes('property24.com');
-  const isPrivateProperty = input.includes('privateproperty.co.za');
-  const isNonSA = input.includes('.co.ke') || input.includes('.com.ng') || input.includes('property24.co.ke');
+  let processedInput = input.trim();
+  
+  // If it's a numeric listing number, convert to full P24 URL first
+  if (/^\d{5,15}$/.test(processedInput)) {
+    processedInput = `https://www.property24.com/for-sale/details/${processedInput}`;
+  }
+
+  const isP24SA = processedInput.includes('property24.com');
+  const isPrivateProperty = processedInput.includes('privateproperty.co.za');
+  const isNonSA = processedInput.includes('.co.ke') || processedInput.includes('.com.ng') || processedInput.includes('property24.co.ke');
 
   if (isNonSA || (!isP24SA && !isPrivateProperty)) {
-    console.warn("Non-South African or unsupported domain listing rejected:", input);
+    console.warn("Non-South African or unsupported domain listing rejected:", processedInput);
     return null;
   }
 
   let html = "";
-  if (input.startsWith('http') && (isP24SA || isPrivateProperty)) {
+  if (processedInput.startsWith('http') && (isP24SA || isPrivateProperty)) {
     try {
-      const fetchRes = await fetch(`/api/fetch-listing?url=${encodeURIComponent(input)}`);
+      const fetchRes = await fetch(`/api/fetch-listing?url=${encodeURIComponent(processedInput)}`);
       if (fetchRes.ok) {
         html = await fetchRes.text();
         
@@ -315,7 +322,7 @@ export async function importPropertyListing(input: string): Promise<Property | n
           textLower.includes("this listing is no longer available");
         
         if (isUnavailable) {
-          console.warn("Property no longer available (detected in HTML):", input);
+          console.warn("Property no longer available (detected in HTML):", processedInput);
           return null;
         }
       } else {
@@ -332,9 +339,9 @@ export async function importPropertyListing(input: string): Promise<Property | n
     ? `EXTRACT HIGH-UTILITY DATA from this South African property listing.
        CRITICAL: If the listing has no price, no description, or no stand size, return null.
        
-       URL: ${input}
+       URL: ${processedInput}
        CONTENT:\n${html.substring(0, 25000)}`
-    : `Find and extract FULL details for South African listing: ${input}. 
+    : `Find and extract FULL details for South African listing: ${processedInput}. 
        CRITICAL: Discard if the listing is truncated, generic, or missing financials/specs. Only return if confirmed in South Africa.`;
 
   const property = await generateAIContent<Property>({
@@ -345,7 +352,7 @@ export async function importPropertyListing(input: string): Promise<Property | n
       1. PRICE: Must be a specific number, not "POA" or empty.
       2. SPECS: Extract 'standSize' in square meters. (often marked as Erf Size or Land Area).
       3. DESCRIPTION: Must extract at least 3-4 sentences of descriptive text.
-      4. IDENTITY: The "p24Url" should be the provided URL: ${input}
+      4. IDENTITY: The "p24Url" should be the provided URL: ${processedInput}
       5. COMPLETENESS: If any of [price, coordinates, suburb, description, standSize] are missing or zero, DO NOT RETURN A VALID OBJECT.
       
       Extract to JSON: name, type, description, p24Url, agent, agentPhone, address, coordinates[lat, lng], specs, financials.` }]}],

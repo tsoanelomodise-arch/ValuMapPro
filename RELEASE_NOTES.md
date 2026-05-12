@@ -88,10 +88,15 @@
   - Hardened Extraction Schema: Forced the AI engine to treat financial and physical specification fields as "Required" to prevent the import of empty property shells.
   - Improved Proxy Diagnostics: Enhanced logging for failed proxy fetches to better distinguish between network issues and stale listings.
 
+- **v2.11 (2026-05-12)**: Import Hardening.
+  - Fixed property import failure when using raw Property24 listing numbers.
+  - Implemented automatic URL normalization for numeric listing identifiers.
+
 - **v2.10 (2026-05-12)**: Infrastructure Search UX Refactor.
   - Replaced the global "Add Substation" modal with a non-obstructive, map-integrated "Infrastructure Search" panel.
   - Added "Search By Name" trigger directly to the map's Discovery Overlay.
   - Linked Sidebar's "Add Substation" action to auto-focus and open the map-based search panel.
+  - Implemented Property Type Filtering in the Spatial Catalog (Residential, Commercial, Industrial, Agricultural, Vacant Land).
 
 - **v2.9 (2026-05-12)**: Infrastructure Management UX.
   - Consolidated substation coordinate editing into a single, validated Geospatial field (`lat, lng`).

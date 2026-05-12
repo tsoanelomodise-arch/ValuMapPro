@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Property, Substation } from './types';
+import { Property, Substation, PropertyType } from './types';
 import MapComponent from './components/Map/MapComponent';
 import EvaluationDashboard from './components/PropertyDetail/EvaluationDashboard';
 import ListView from './components/ListView/ListView';
@@ -51,6 +51,7 @@ export default function App() {
   const [activeCategory, setActiveCategory] = useState<'properties' | 'substations'>('properties');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedPropertyTypes, setSelectedPropertyTypes] = useState<PropertyType[]>([]);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [propertyToDelete, setPropertyToDelete] = useState<string | null>(null);
   const [propertiesToDelete, setPropertiesToDelete] = useState<string[] | null>(null);
@@ -179,22 +180,30 @@ export default function App() {
 
   // Memoized filtered data for efficiency
   const filteredProperties = useMemo(() => 
-    properties.filter(p => 
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.address.suburb.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.address.street.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.address.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.type.toLowerCase().includes(searchQuery.toLowerCase())
-    ), [properties, searchQuery]);
+    properties.filter(p => {
+      const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.address.suburb.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.address.street.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.address.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.type.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesType = selectedPropertyTypes.length === 0 || selectedPropertyTypes.includes(p.type);
+      
+      return matchesSearch && matchesType;
+    }), [properties, searchQuery, selectedPropertyTypes]);
 
   const filteredCandidateProperties = useMemo(() => 
-    candidateProperties.filter(p => 
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.address.suburb.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.address.street.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.address.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.type.toLowerCase().includes(searchQuery.toLowerCase())
-    ), [candidateProperties, searchQuery]);
+    candidateProperties.filter(p => {
+      const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.address.suburb.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.address.street.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.address.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.type.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesType = selectedPropertyTypes.length === 0 || selectedPropertyTypes.includes(p.type);
+
+      return matchesSearch && matchesType;
+    }), [candidateProperties, searchQuery, selectedPropertyTypes]);
 
   const filteredSubstations = useMemo(() =>
     substations.filter(s =>
@@ -467,6 +476,8 @@ export default function App() {
                          <SpatialCatalog 
                            properties={filteredProperties}
                            candidateProperties={filteredCandidateProperties}
+                           selectedPropertyTypes={selectedPropertyTypes}
+                           setSelectedPropertyTypes={setSelectedPropertyTypes}
                            substations={filteredSubstations}
                            candidateSubstations={filteredCandidateSubstations}
                            selectedPropertyId={selectedProperty?.id}
