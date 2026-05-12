@@ -88,6 +88,15 @@
   - Hardened Extraction Schema: Forced the AI engine to treat financial and physical specification fields as "Required" to prevent the import of empty property shells.
   - Improved Proxy Diagnostics: Enhanced logging for failed proxy fetches to better distinguish between network issues and stale listings.
 
+- **v2.9 (2026-05-12)**: Infrastructure Management UX.
+  - Consolidated substation coordinate editing into a single, validated Geospatial field (`lat, lng`).
+  - Implemented real-time coordinate parsing and validation within the Edit Modal.
+
+- **v2.8 (2026-05-12)**: Spatial Reach Expansion.
+  - Expanded automated property discovery radius from 1km to 3km around selected substations.
+  - Recalibrated bounding box geometry for better coverage in semi-rural South African regions.
+  - Updated AI grounding prompts to strictly enforce the new 3km proximity requirement during harvesting.
+
 - **v2.7 (2026-05-12)**: Clean Slate Deployment.
   - Removed all hardcoded mock properties and substations from the initial application state.
   - Implemented "Clean Slate" policy: new deployments now start with an empty spatial catalog to prevent unwanted sample data.

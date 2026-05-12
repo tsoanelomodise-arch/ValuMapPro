@@ -139,14 +139,14 @@ export function useDiscovery({
       addNotification(`Searching near ${selectedSubstation.name}...`, 'info');
       setDiscoveryProgress({ current: 0, total: 1, status: 'Scanning Property24 & PrivateProperty...' });
       
-      // Enforce 1km bounding box around substation
+      // Enforce 3km bounding box around substation
       // 1km lat is ~0.009, 1km lng is ~0.01 in South Africa
       const [lat, lng] = selectedSubstation.coordinates;
       const kmBounds = {
-        north: lat + 0.009,
-        south: lat - 0.009,
-        east: lng + 0.01,
-        west: lng - 0.01
+        north: lat + 0.027,
+        south: lat - 0.027,
+        east: lng + 0.03,
+        west: lng - 0.03
       };
 
       const links = await findLandListingLinks(kmBounds.north, kmBounds.south, kmBounds.east, kmBounds.west, selectedSubstation);

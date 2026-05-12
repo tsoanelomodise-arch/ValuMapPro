@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { X, Zap, ExternalLink } from 'lucide-react';
 import { Substation } from '../../types';
+import { cn } from '../../lib/utils';
 
 interface SubstationEditModalProps {
   substation: Substation;
@@ -14,6 +15,8 @@ export default function SubstationEditModal({
   onSave 
 }: SubstationEditModalProps) {
   const [formData, setFormData] = useState<Substation>(substation);
+  const [coordString, setCoordString] = useState(`${substation.coordinates[0]}, ${substation.coordinates[1]}`);
+  const [coordError, setCoordError] = useState<string | null>(null);
 
   // Derived state: calculate amps directly during render for "speed" and simplicity
   const calculatedAmps = useMemo(() => {
@@ -23,7 +26,23 @@ export default function SubstationEditModal({
     return undefined;
   }, [formData.mvaCapacity, formData.voltageKV]);
 
+  const handleCoordChange = (val: string) => {
+    setCoordString(val);
+    const parts = val.split(',').map(p => p.trim());
+    if (parts.length === 2) {
+      const lat = parseFloat(parts[0]);
+      const lng = parseFloat(parts[1]);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        setFormData(prev => ({ ...prev, coordinates: [lat, lng] }));
+        setCoordError(null);
+        return;
+      }
+    }
+    setCoordError("Invalid format. Use: lat, lng");
+  };
+
   const handleSave = () => {
+    if (coordError) return;
     onSave({
       ...formData,
       availableAmps: calculatedAmps
@@ -112,28 +131,18 @@ export default function SubstationEditModal({
 
               <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block">Geospatial Coordinates</label>
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <input
-                      type="number"
-                      step="any"
-                      value={formData.coordinates[0]}
-                      onChange={(e) => setFormData(prev => ({ ...prev, coordinates: [Number(e.target.value), prev.coordinates[1]] }))}
-                      className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-600 focus:bg-white rounded-xl px-4 py-3 text-xs font-mono font-bold transition-all outline-none"
-                      placeholder="Latitude"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <input
-                      type="number"
-                      step="any"
-                      value={formData.coordinates[1]}
-                      onChange={(e) => setFormData(prev => ({ ...prev, coordinates: [prev.coordinates[0], Number(e.target.value)] }))}
-                      className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-600 focus:bg-white rounded-xl px-4 py-3 text-xs font-mono font-bold transition-all outline-none"
-                      placeholder="Longitude"
-                    />
-                  </div>
-                </div>
+                <input
+                  value={coordString}
+                  onChange={(e) => handleCoordChange(e.target.value)}
+                  className={cn(
+                    "w-full bg-slate-50 border-2 rounded-xl px-4 py-3 text-xs font-mono font-bold transition-all outline-none",
+                    coordError ? "border-red-500 focus:border-red-600 bg-red-50" : "border-transparent focus:border-indigo-600 focus:bg-white"
+                  )}
+                  placeholder="lat, lng"
+                />
+                {coordError && (
+                  <p className="text-[8px] font-black text-red-500 uppercase tracking-widest mt-1 ml-1">{coordError}</p>
+                )}
               </div>
 
               {formData.googleMapsUrl && (

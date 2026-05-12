@@ -245,7 +245,7 @@ export async function findLandListingLinks(north: number, south: number, east: n
                         anchorSubstation.coordinates.length >= 2;
 
   const substationContext = hasValidCoords
-    ? `\nCRITICAL TARGET: You MUST find currently active VACANT LAND listings specifically within a 1-5km radius of the "${anchorSubstation.name}" substation located at ${anchorSubstation.coordinates[0]}, ${anchorSubstation.coordinates[1]}.`
+    ? `\nCRITICAL TARGET: You MUST find currently active VACANT LAND listings specifically within a 3km radius of the "${anchorSubstation.name}" substation located at ${anchorSubstation.coordinates[0]}, ${anchorSubstation.coordinates[1]}.`
     : "";
 
   const searchQuery = hasValidCoords

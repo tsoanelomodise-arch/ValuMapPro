@@ -16,6 +16,10 @@ This project is a professional property evaluation tool for solar/electrical inf
 - **Lock Down**: This system's core map and coordinate handling are in a "Locked" state. Major deviations from the `MapComponent.tsx` architecture require explicit justification.
 
 ## Release History
+- **v2.9 (2026-05-12)**: Infrastructure Management UX.
+  - Consolidated coordinate editing into a single field.
+- **v2.8 (2026-05-12)**: Spatial Reach Expansion.
+  - Expanded property discovery radius to 3km around substations.
 - **v2.7 (2026-05-12)**: Clean Slate Deployment.
   - Removed all mock data from initial state.
   - Switched Reset to Clear Catalog (complete wipe).
