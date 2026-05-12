@@ -13,6 +13,7 @@ interface MapDetailsOverlayProps {
   onOpenDetails: (property: Property) => void;
   onDiscoverLand?: (bounds: { north: number, south: number, east: number, west: number }) => void;
   isDiscoveringLand?: boolean;
+  discoveryProgress?: { current: number, total: number, status?: string } | null;
   'data-html2canvas-ignore'?: string;
 }
 
@@ -26,6 +27,7 @@ export default function MapDetailsOverlay({
   onOpenDetails,
   onDiscoverLand,
   isDiscoveringLand,
+  discoveryProgress,
   ...props
 }: MapDetailsOverlayProps) {
   if (!property && !substation) return null;
@@ -89,7 +91,7 @@ export default function MapDetailsOverlay({
                 <div className="mt-1 w-1 h-1 rounded-full bg-slate-400 shrink-0" />
                 <div className="flex flex-wrap gap-x-2 gap-y-0.5">
                   <span className="font-bold text-slate-500 uppercase tracking-tighter text-[9px]">Asking Price:</span>
-                  <span className="text-slate-900 font-bold">R {property.financials.purchasePrice?.toLocaleString() || '0'}</span>
+                  <span className="text-slate-900 font-bold">R {property.financials?.purchasePrice?.toLocaleString() || '0'}</span>
                 </div>
               </div>
 
@@ -247,14 +249,22 @@ export default function MapDetailsOverlay({
               }}
               disabled={isDiscoveringLand}
               className={cn(
-                "w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 mb-4",
+                "w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex flex-col items-center justify-center gap-1 mb-4",
                 isDiscoveringLand 
                   ? "bg-slate-100 text-slate-400 cursor-not-allowed"
                   : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200 active:scale-[0.98]"
               )}
             >
-              <Mountain className="w-3.5 h-3.5" />
-              {isDiscoveringLand ? "Scanning Area..." : "Discover Land Near Here"}
+              <div className="flex items-center gap-2">
+                <Mountain className="w-3.5 h-3.5" />
+                <span>{isDiscoveringLand ? "Harvesting Land Data..." : "Discover Land Near Here"}</span>
+              </div>
+              
+              {isDiscoveringLand && discoveryProgress?.status && (
+                <div className="text-[8px] font-bold text-indigo-500 animate-pulse truncate max-w-full px-2">
+                  {discoveryProgress.status}
+                </div>
+              )}
             </button>
 
             <div className="flex items-center gap-2 text-[9px] font-black text-blue-400 italic">

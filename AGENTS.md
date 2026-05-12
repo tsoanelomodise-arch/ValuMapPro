@@ -16,8 +16,8 @@ This project is a professional property evaluation tool for solar/electrical inf
 - **Lock Down**: This system's core map and coordinate handling are in a "Locked" state. Major deviations from the `MapComponent.tsx` architecture require explicit justification.
 
 ## Release History
-- **v1.0 (2026-05-09)**: Initial System Lockdown. 
-  - Fixed Leaflet "center/zoom" initialization racing errors.
-  - Restricted AI Discovery tools to Vacant Land, Plots, and Farms.
-  - Implemented Wide/Narrow toggle for Spatial Catalog.
-  - Added coordinate validation safeguards.
+- **v2.4 (2026-05-11)**: Multi-Source Regional Lockdown.
+  - Integrated `privateproperty.co.za` support.
+  - Hardened South African regional filters for all harvesting operations.
+  - Added real-time discovery status reporting.
+  - Implemented Google Maps verification for infrastructure imports.

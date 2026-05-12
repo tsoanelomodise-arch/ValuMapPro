@@ -161,23 +161,27 @@ export async function searchSubstationsByArea(north: number, south: number, east
 }
 
 export async function searchVacantLandByArea(north: number, south: number, east: number, west: number): Promise<Property[]> {
-  const data = await generateAIContent<{ properties: Property[] }>({
+    const data = await generateAIContent<{ properties: Property[] }>({
     model: MODEL_NAME,
-    contents: [{ role: 'user', parts: [{ text: `Search for VACANT LAND, UNIMPROVED PLOT, or FARM listings for sale in South Africa using:
-         site:property24.com
+    contents: [{ role: 'user', parts: [{ text: `Search for high-quality, ACTIVE Vacant Land listings in South Africa.
          
-         GEOGRAPHIC ACCURACY:
-         Cross-reference listing locations with Google Maps satellite views and Google Earth topography to ensure coordinates [lat, lng] are accurately centered on the land parcel.
+         GEOGRAPHIC FOCUS:
+         Latitude: ${south} to ${north}
+         Longitude: ${west} to ${east}
          
-         CRITICAL: ONLY use property24.com (South Africa). 
-         DO NOT search or return anything from property24.co.ke (Kenya).
+         UTILITY REQUIREMENTS:
+         - Discard listings that are "Sold", "Reserved", or missing a price.
+         - Only return listings with comprehensive details (Stand size, price, clear description).
+         - SITE FOCUS: site:property24.com OR site:privateproperty.co.za
          
-         Geographic Focus: ${south} S to ${north} S latitude and ${west} E to ${east} E longitude.
+         CRITICAL REGIONAL LOCK:
+         - ONLY return listings from South Africa (.co.za or .com).
+         - DO NOT RETURN listings from Kenya (property24.co.ke), Nigeria, or any other country.
          
-         STRICT REQUIREMENTS:
-         1. ONLY vacant land/plots/farms.
-         2. EVERY listing MUST have precise [lat, lng].
-         3. ONLY include listings that are ACTIVE and AVAILABLE. Exclude anything marked "no longer available".` }]}],
+         VULNERABILITY PREVENTION:
+         Do not guess URLs. ONLY return real URLs found in search result snippets.
+         
+         Return JSON: name, type, description, p24Url, address, coordinates [lat, lng], financials.` }]}],
     tools: [{ googleSearch: {} }],
     config: {
       responseMimeType: "application/json",
@@ -198,15 +202,23 @@ export async function searchVacantLandByArea(north: number, south: number, east:
                   properties: {
                     suburb: { type: Type.STRING },
                     city: { type: Type.STRING },
-                    province: { type: Type.STRING },
-                    country: { type: Type.STRING }
+                    province: { type: Type.STRING }
                   },
                   required: ["suburb", "city"]
                 },
                 coordinates: { type: Type.ARRAY, items: { type: Type.NUMBER } },
-                financials: { type: Type.OBJECT, properties: { purchasePrice: { type: Type.NUMBER } } }
+                financials: { 
+                  type: Type.OBJECT, 
+                  properties: { purchasePrice: { type: Type.NUMBER } },
+                  required: ["purchasePrice"]
+                },
+                specs: {
+                  type: Type.OBJECT,
+                  properties: { standSize: { type: Type.NUMBER } },
+                  required: ["standSize"]
+                }
               },
-              required: ["name", "address", "coordinates", "p24Url", "type"]
+              required: ["name", "description", "address", "coordinates", "p24Url", "financials", "specs"]
             }
           }
         },
@@ -217,8 +229,11 @@ export async function searchVacantLandByArea(north: number, south: number, east:
 
   return (data?.properties || []).filter(p => 
     p.p24Url && 
-    p.p24Url.includes('property24.com') && 
-    !p.p24Url.includes('property24.co.ke')
+    p.p24Url.includes('property24.com/for-sale/') && 
+    p.financials?.purchasePrice > 0 &&
+    p.specs?.standSize > 0 &&
+    p.description?.length > 50 &&
+    Array.isArray(p.coordinates) && p.coordinates.length === 2
   );
 }
 
@@ -228,24 +243,26 @@ export async function findLandListingLinks(north: number, south: number, east: n
                         anchorSubstation.coordinates.length >= 2;
 
   const substationContext = hasValidCoords
-    ? `\nCRITICAL TARGET: You MUST find VACANT LAND, UNIMPROVED PLOTS, or FARMS specifically within a 1km radius of the "${anchorSubstation.name}" substation located at ${anchorSubstation.coordinates[0]}, ${anchorSubstation.coordinates[1]}.`
+    ? `\nCRITICAL TARGET: You MUST find currently active VACANT LAND listings specifically within a 1-5km radius of the "${anchorSubstation.name}" substation located at ${anchorSubstation.coordinates[0]}, ${anchorSubstation.coordinates[1]}.`
     : "";
 
   const searchQuery = hasValidCoords
-    ? `site:property24.com VACANT LAND for sale near "${anchorSubstation.name}" ${anchorSubstation.address}`
-    : `site:property24.com VACANT LAND for sale South Africa ${north}..${south} latitude ${east}..${west} longitude`;
+    ? `(site:property24.com OR site:privateproperty.co.za) "vacant land" for sale near "${anchorSubstation.address}"`
+    : `(site:property24.com OR site:privateproperty.co.za) "vacant land" for sale South Africa ${north}..${south} latitude ${east}..${west} longitude`;
 
   const data = await generateAIContent<{ links: string[] }>({
     model: MODEL_NAME,
-    contents: [{ role: 'user', parts: [{ text: `Find up to 5 direct property listing URLs for VACANT LAND or FARMS specifically in South Africa.
+    contents: [{ role: 'user', parts: [{ text: `Find up to 5 direct URLs for ACTIVE Vacant Land or Farm listings in South Africa.
       
       SEARCH QUERY: ${searchQuery}
       
-      CRITICAL: ONLY use property24.com (South Africa). 
-      DO NOT search or return anything from property24.co.ke (Kenya).
-      
+      VERIFICATION PROTOCOL:
+      1. ONLY return URLs from property24.com (SA) or privateproperty.co.za.
+      2. If you are not 100% sure the URL is a real, active listing, DO NOT return it.
+      3. CRITICAL: EXCLUDE property24.co.ke (Kenya) and property24.com.ng (Nigeria).
       ${substationContext}
-      REQUIREMENT: Return ONLY direct URLs to Property24 detail pages. No search result pages.` }]}],
+      
+      REQUIREMENT: Return ONLY direct URLs to detail pages.` }]}],
     tools: [{ googleSearch: {} }],
     config: {
       responseMimeType: "application/json",
@@ -260,53 +277,76 @@ export async function findLandListingLinks(north: number, south: number, east: n
   });
 
   return (data?.links || []).filter(link => 
-    link.includes('property24.com') && 
-    !link.includes('property24.co.ke')
+    (link.includes('property24.com/for-sale/') || link.includes('privateproperty.co.za/for-sale/')) && 
+    !link.includes('.co.ke') &&
+    !link.includes('.com.ng') &&
+    !link.includes('property24.co.ke') &&
+    !link.includes('/search/') // Avoid search result pages
   );
 }
 
 export async function importPropertyListing(input: string): Promise<Property | null> {
-  const isP24 = input.includes('property24.com');
-  const isP24Kenya = input.includes('property24.co.ke');
+  const isP24SA = input.includes('property24.com');
+  const isPrivateProperty = input.includes('privateproperty.co.za');
+  const isNonSA = input.includes('.co.ke') || input.includes('.com.ng') || input.includes('property24.co.ke');
 
-  if (isP24Kenya) {
-    console.warn("Kenya listings are not allowed:", input);
+  if (isNonSA || (!isP24SA && !isPrivateProperty)) {
+    console.warn("Non-South African or unsupported domain listing rejected:", input);
     return null;
   }
 
   let html = "";
-  if (input.startsWith('http') && isP24) {
+  if (input.startsWith('http') && (isP24SA || isPrivateProperty)) {
     try {
       const fetchRes = await fetch(`/api/fetch-listing?url=${encodeURIComponent(input)}`);
       if (fetchRes.ok) {
         html = await fetchRes.text();
-        // More robust availability check
-        const isUnavailable = html.includes("The property you are looking for is no longer available") || 
-                            html.includes("Property no longer available") ||
-                            html.includes("listing-unavailable-message");
+        
+        // Check for specific markers in the raw HTML that suggest the listing is gone
+        const textLower = html.toLowerCase();
+        const isUnavailable = 
+          textLower.includes("listing not found") ||
+          textLower.includes("property you are looking for is no longer available") || 
+          textLower.includes("listing no longer exists") ||
+          textLower.includes("listing-unavailable-message") ||
+          textLower.includes("property no longer available") ||
+          textLower.includes("this listing is no longer available");
         
         if (isUnavailable) {
-          console.warn("Property no longer available:", input);
+          console.warn("Property no longer available (detected in HTML):", input);
           return null;
         }
+      } else {
+        console.warn(`Proxy fetch failed with status: ${fetchRes.status}`);
       }
     } catch (e) {
       console.warn("Proxy fetch failed", e);
     }
   }
 
+  // If we couldn't fetch HTML and it's a URL, we risk hallucination by searching.
+  // We'll only allow search as a fallback for listing numbers or if the search can confirm the URL exists.
   const promptPrefix = html 
-    ? `Extract property details from this Property24 listing page.\nURL: ${input}\nCONTENT:\n${html.substring(0, 25000)}`
-    : `Find and extract details for a Property24 South African property listing: ${input}. Use Google Search.`;
+    ? `EXTRACT HIGH-UTILITY DATA from this South African property listing.
+       CRITICAL: If the listing has no price, no description, or no stand size, return null.
+       
+       URL: ${input}
+       CONTENT:\n${html.substring(0, 25000)}`
+    : `Find and extract FULL details for South African listing: ${input}. 
+       CRITICAL: Discard if the listing is truncated, generic, or missing financials/specs. Only return if confirmed in South Africa.`;
 
   const property = await generateAIContent<Property>({
     model: MODEL_NAME,
     contents: [{ role: 'user', parts: [{ text: `${promptPrefix}
-      Extract to JSON: name, type, description, p24Url, agent, agentPhone, address, coordinates[lat, lng], specs, financials.
-      STRICT PROPERTY RULES:
-      1. VACANT LAND/PLOTS/FARMS only.
-      2. Accurate GPS extraction.
-      3. The "p24Url" MUST be exactly: ${input}` }]}],
+      
+      STRICT VALIDATION RULES:
+      1. PRICE: Must be a specific number, not "POA" or empty.
+      2. SPECS: Extract 'standSize' in square meters. (often marked as Erf Size or Land Area).
+      3. DESCRIPTION: Must extract at least 3-4 sentences of descriptive text.
+      4. IDENTITY: The "p24Url" should be the provided URL: ${input}
+      5. COMPLETENESS: If any of [price, coordinates, suburb, description, standSize] are missing or zero, DO NOT RETURN A VALID OBJECT.
+      
+      Extract to JSON: name, type, description, p24Url, agent, agentPhone, address, coordinates[lat, lng], specs, financials.` }]}],
     tools: html ? [] : [{ googleSearch: {} }],
     config: {
       responseMimeType: "application/json",
@@ -327,17 +367,46 @@ export async function importPropertyListing(input: string): Promise<Property | n
               city: { type: Type.STRING },
               province: { type: Type.STRING },
               country: { type: Type.STRING }
-            }
+            },
+            required: ["suburb", "city"]
           },
-          coordinates: { type: Type.ARRAY, items: { type: Type.NUMBER }, nullable: true },
-          coordinatesFlag: { type: Type.STRING, enum: ['precise', 'approximate'] },
-          specs: { type: Type.OBJECT, properties: { standSize: { type: Type.NUMBER }, titleType: { type: Type.STRING } } },
-          financials: { type: Type.OBJECT, properties: { purchasePrice: { type: Type.NUMBER }, marketValue: { type: Type.NUMBER } } }
+          coordinates: { type: Type.ARRAY, items: { type: Type.NUMBER } },
+          specs: {
+            type: Type.OBJECT,
+            properties: {
+              standSize: { type: Type.NUMBER },
+              titleType: { type: Type.STRING }
+            },
+            required: ["standSize"]
+          },
+          financials: {
+            type: Type.OBJECT,
+            properties: {
+              purchasePrice: { type: Type.NUMBER },
+              rates: { type: Type.NUMBER }
+            },
+            required: ["purchasePrice"]
+          }
         },
-        required: ["name", "type", "address"]
+        required: ["name", "description", "address", "coordinates", "p24Url", "specs", "financials"]
       }
     }
   });
+
+  // Final sanity check on data quality
+  if (property) {
+    const hasPrice = property.financials?.purchasePrice && property.financials.purchasePrice > 0;
+    const hasSize = property.specs?.standSize && property.specs.standSize > 0;
+    const hasDesc = property.description && property.description.length > 50;
+    const isSA = property.p24Url?.includes('property24.com/for-sale/') || property.p24Url?.includes('privateproperty.co.za/for-sale/');
+    const isNotNonSA = !property.p24Url?.includes('.co.ke') && !property.p24Url?.includes('.com.ng');
+    const hasCoords = Array.isArray(property.coordinates) && property.coordinates.length === 2 && !isNaN(property.coordinates[0]);
+    
+    if (!hasPrice || !hasSize || !hasDesc || !isSA || !isNotNonSA || !hasCoords) {
+      console.warn("Discarding low-utility or invalid regional property listing:", input);
+      return null;
+    }
+  }
 
   return property;
 }
@@ -377,19 +446,50 @@ export async function searchSubstationDetails(type: string, value: string): Prom
   return substation;
 }
 
+export async function verifySubstationAddress(name: string, currentAddress: string): Promise<string> {
+  const data = await generateAIContent<{ correctedAddress: string }>({
+    model: MODEL_NAME,
+    contents: [{ role: 'user', parts: [{ text: `Verify the official physical address for the "${name}" substation in South Africa.
+      Current hint: ${currentAddress}
+      
+      Use Google Search and Google Maps to find the confirmed street/area address for this specific electrical infrastructure.
+      Return the most accurate version found.
+      
+      Return JSON: correctedAddress.` }]}],
+    tools: [{ googleSearch: {} }],
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          correctedAddress: { type: Type.STRING }
+        },
+        required: ["correctedAddress"]
+      }
+    }
+  });
+
+  return data?.correctedAddress || currentAddress;
+}
+
 export async function searchVacantLandByLocationName(location: string): Promise<Property[]> {
   const data = await generateAIContent<{ properties: Property[] }>({
     model: MODEL_NAME,
-    contents: [{ role: 'user', parts: [{ text: `Search for 5 actually available VACANT LAND, UNIMPROVED PLOT, or FARM listings for sale in "${location}", South Africa using:
-         site:property24.com
+    contents: [{ role: 'user', parts: [{ text: `Search for high-quality, ACTIVE Vacant Land listings in "${location}", South Africa.
          
-         CRITICAL: ONLY use property24.com (South Africa). 
-         DO NOT search or return anything from property24.co.ke (Kenya).
+         UTILITY REQUIREMENTS:
+         - Discard listings without a clear price or stand size.
+         - Only return listings with comprehensive details.
+         - SITE FOCUS: site:property24.com OR site:privateproperty.co.za
          
-         STRICT REQUIREMENTS:
-         1. ONLY vacant land/plots/farms.
-         2. EVERY listing MUST have coordinates [lat, lng].
-         3. ONLY include listings that are ACTIVE and AVAILABLE. Exclude anything marked "no longer available".` }]}],
+         CRITICAL REGIONAL LOCK:
+         - ONLY return listings from South Africa.
+         - DO NOT RETURN listings from Kenya (.co.ke), Nigeria, or any other country.
+         
+         VULNERABILITY PREVENTION:
+         Do not guess URLs. ONLY return real URLs found in search result snippets.
+         
+         Return JSON: name, type, description, p24Url, address, coordinates [lat, lng], financials, specs.` }]}],
     tools: [{ googleSearch: {} }],
     config: {
       responseMimeType: "application/json",
@@ -410,15 +510,23 @@ export async function searchVacantLandByLocationName(location: string): Promise<
                   properties: {
                     suburb: { type: Type.STRING },
                     city: { type: Type.STRING },
-                    province: { type: Type.STRING },
-                    country: { type: Type.STRING }
+                    province: { type: Type.STRING }
                   },
                   required: ["suburb", "city"]
                 },
                 coordinates: { type: Type.ARRAY, items: { type: Type.NUMBER } },
-                financials: { type: Type.OBJECT, properties: { purchasePrice: { type: Type.NUMBER } } }
+                financials: { 
+                  type: Type.OBJECT, 
+                  properties: { purchasePrice: { type: Type.NUMBER } },
+                  required: ["purchasePrice"]
+                },
+                specs: {
+                  type: Type.OBJECT,
+                  properties: { standSize: { type: Type.NUMBER } },
+                  required: ["standSize"]
+                }
               },
-              required: ["name", "address", "coordinates", "p24Url", "type"]
+              required: ["name", "description", "address", "coordinates", "p24Url", "financials", "specs"]
             }
           }
         },
@@ -429,8 +537,11 @@ export async function searchVacantLandByLocationName(location: string): Promise<
 
   return (data?.properties || []).filter(p => 
     p.p24Url && 
-    p.p24Url.includes('property24.com') && 
-    !p.p24Url.includes('property24.co.ke')
+    (p.p24Url.includes('property24.com/for-sale/') || p.p24Url.includes('privateproperty.co.za/for-sale/')) && 
+    p.financials?.purchasePrice > 0 &&
+    p.specs?.standSize > 0 &&
+    p.description?.length > 50 &&
+    Array.isArray(p.coordinates) && p.coordinates.length === 2 && !isNaN(p.coordinates[0])
   );
 }
 

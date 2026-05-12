@@ -25,7 +25,7 @@ export function useDiscovery({
 }: UseDiscoveryProps) {
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [isDiscoveringLand, setIsDiscoveringLand] = useState(false);
-  const [discoveryProgress, setDiscoveryProgress] = useState<{ current: number, total: number } | null>(null);
+  const [discoveryProgress, setDiscoveryProgress] = useState<{ current: number, total: number, status?: string } | null>(null);
   
   const discoveryAbortControllerRef = useRef<AbortController | null>(null);
 
@@ -133,10 +133,11 @@ export function useDiscovery({
     discoveryAbortControllerRef.current = controller;
 
     setIsDiscoveringLand(true);
-    setDiscoveryProgress({ current: 0, total: 1 });
+    setDiscoveryProgress({ current: 0, total: 1, status: 'Initializing Search...' });
     
     try {
       addNotification(`Searching near ${selectedSubstation.name}...`, 'info');
+      setDiscoveryProgress({ current: 0, total: 1, status: 'Scanning Property24 & PrivateProperty...' });
       
       // Enforce 1km bounding box around substation
       // 1km lat is ~0.009, 1km lng is ~0.01 in South Africa
@@ -160,16 +161,23 @@ export function useDiscovery({
       }
 
       addNotification(`Harvesting details for ${links.length} listings...`, 'info');
-      setDiscoveryProgress({ current: 0, total: links.length });
+      setDiscoveryProgress({ current: 0, total: links.length, status: `Found ${links.length} potential matches...` });
       
       let count = 0;
       for (let i = 0; i < links.length; i++) {
         if (controller.signal.aborted) break;
-        setDiscoveryProgress(prev => prev ? { ...prev, current: i + 1 } : null);
+        
+        const url = links[i];
+        const displayUrl = url.replace('https://www.', '').split('/')[0];
+        setDiscoveryProgress(prev => prev ? { 
+          ...prev, 
+          current: i + 1,
+          status: `Harvesting listing ${i + 1}/${links.length} (${displayUrl})...`
+        } : null);
         
         try {
           const res = await importPropertyListing(links[i]);
-          if (res && !controller.signal.aborted) {
+          if (res && res.coordinates && !controller.signal.aborted) {
             let finalCoords = res.coordinates;
             let coordinatesFlag: 'precise' | 'approximate' = 'precise';
 
@@ -181,20 +189,25 @@ export function useDiscovery({
             }
 
             if (!finalCoords || !Array.isArray(finalCoords) || isNaN(finalCoords[0])) {
-               coordinatesFlag = 'approximate';
-               const subCoords = selectedSubstation.coordinates || [-26.1, 28.1];
-               const jitter = () => (Math.random() - 0.5) * 0.01; 
-               finalCoords = [subCoords[0] + jitter(), subCoords[1] + jitter()] as [number, number];
+               // Skip properties without valid coordinates
+               continue;
+            }
+
+            const hasGoodDescription = res.description && res.description.length > 50;
+            const hasPrice = res.financials?.purchasePrice && res.financials.purchasePrice > 0;
+            const hasSize = res.specs?.standSize && res.specs.standSize > 0;
+
+            if (!hasGoodDescription || !hasPrice || !hasSize) {
+               console.warn(`Skipping low-utility listing: ${res.name} (Missing core evaluation data)`);
+               continue;
             }
 
             const newCandidate: Property = {
               ...res,
               id: `candidate-land-${Date.now()}-${i}`,
               coordinates: finalCoords as [number, number],
-              coordinatesFlag,
-              description: coordinatesFlag === 'approximate' 
-                ? `${res.description || ''} (Approximate location)`.trim()
-                : res.description,
+              coordinatesFlag: 'precise',
+              description: res.description,
               type: res.type || 'Vacant Land',
               specs: res.specs || { standSize: 1000, titleType: 'Full title' },
               financials: {

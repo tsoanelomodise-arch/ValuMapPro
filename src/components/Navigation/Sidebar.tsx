@@ -100,7 +100,7 @@ export function Sidebar({
             <span className="text-[9px] font-bold text-slate-600 uppercase tracking-[0.2em] block mb-1">Stability Mode</span>
             <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded-full">
               <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse" />
-              <span className="text-[8px] font-bold text-blue-400 uppercase tracking-widest">Base System v1.0</span>
+              <span className="text-[8px] font-bold text-blue-400 uppercase tracking-widest">Base System v2.5</span>
             </div>
           </div>
         )}

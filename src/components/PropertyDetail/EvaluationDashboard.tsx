@@ -69,7 +69,12 @@ export default function EvaluationDashboard({
     return { substation: closest, distance: minD };
   }, [property, substations]);
 
-  const { specs, financials, address, notes } = isEditing ? editedProperty : property;
+  const { 
+    specs = { standSize: 0, titleType: 'N/A' }, 
+    financials = { purchasePrice: 0, marketValue: 0 }, 
+    address, 
+    notes 
+  } = isEditing ? editedProperty : property;
 
   const extractCoordsFromUrl = (url: string): [number, number] | null => {
     const regex = /@(-?\d+\.\d+),(-?\d+\.\d+)|ll=(-?\d+\.\d+),(-?\d+\.\d+)|q=(-?\d+\.\d+),(-?\d+\.\d+)/;

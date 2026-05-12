@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Search, Plus, Check, Loader2, X, Zap } from 'lucide-react';
 import { Substation } from '../../types';
-import { searchSubstations, AISubstation } from '../../services/geminiService';
+import { searchSubstations, AISubstation, verifySubstationAddress } from '../../services/geminiService';
 import { cn } from '../../lib/utils';
 
 interface SubstationAddFormProps {
@@ -16,6 +16,7 @@ export default function SubstationAddForm({ onAdd, onShowCandidates, isSubmittin
   const [searchResults, setSearchResults] = useState<AISubstation[]>([]);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [isSearching, setIsSearching] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleAISearch = async () => {
@@ -52,50 +53,63 @@ export default function SubstationAddForm({ onAdd, onShowCandidates, isSubmittin
     }
   };
 
-  const handleBulkImport = () => {
+  const handleBulkImport = async () => {
     if (selectedIndices.size === 0) return;
     
-    const selected = searchResults.filter((_, idx) => selectedIndices.has(idx));
-    const subs: Substation[] = selected.map(aiSub => {
-      let safeCoords = aiSub.coordinates;
-      if (!safeCoords || !Array.isArray(safeCoords) || safeCoords.length < 2 || isNaN(safeCoords[0]) || isNaN(safeCoords[1])) {
-        safeCoords = [-26.1311, 28.0536];
-      } else {
-        let [lat, lng] = safeCoords;
-        // South Africa Coordinate Correction (SA Lat is always negative, Lng always positive)
-        // Case 1: Swapped + Wrong Sign [Lng, -Lat] -> [28, 26]
-        if (lat > 15 && lat < 35 && lng > 20 && lng < 40) {
-           safeCoords = [-lat, lng];
-        } 
-        // Case 2: Swapped [Lng, Lat] -> [28, -26]
-        else if (lat > 15 && lat < 35 && lng < -20 && lng > -36) {
-           safeCoords = [lng, lat];
-        }
-        // Case 3: Just positive Lat [Lat, Lng] -> [26, 28]
-        else if (lat > 0 && lat < 40 && lng > 15 && lng < 35) {
-           safeCoords = [-lat, lng];
-        }
-      }
-      return {
-        id: Math.random().toString(36).substr(2, 9),
-        name: aiSub.name,
-        owner: aiSub.owner,
-        address: aiSub.address,
-        coordinates: safeCoords as [number, number],
-        status: 'Active',
-        capacity: aiSub.mvaCapacity ? `${aiSub.mvaCapacity} MVA` : (aiSub.description || 'Verified via AI'),
-        voltageKV: aiSub.voltageKV,
-        mvaCapacity: aiSub.mvaCapacity
-      };
-    });
+    setIsVerifying(true);
+    
+    try {
+      const selected = searchResults.filter((_, idx) => selectedIndices.has(idx));
+      
+      // Verification step as requested
+      const verifiedItems = await Promise.all(selected.map(async (item) => {
+        const verifiedAddress = await verifySubstationAddress(item.name, item.address);
+        return { ...item, address: verifiedAddress };
+      }));
 
-    if (subs.length === 1) {
-      onAdd({ type: 'direct', value: subs[0].name, payload: subs[0] });
-    } else {
-      onAdd({ type: 'direct', value: 'Imported from AI Search', payload: subs });
+      const subs: Substation[] = verifiedItems.map(aiSub => {
+        let safeCoords = aiSub.coordinates;
+        if (!safeCoords || !Array.isArray(safeCoords) || safeCoords.length < 2 || isNaN(safeCoords[0]) || isNaN(safeCoords[1])) {
+          safeCoords = [-26.1311, 28.0536];
+        } else {
+          let [lat, lng] = safeCoords;
+          // South Africa Coordinate Correction (SA Lat is always negative, Lng always positive)
+          // Case 1: Swapped + Wrong Sign [Lng, -Lat] -> [28, 26]
+          if (lat > 15 && lat < 35 && lng > 20 && lng < 40) {
+             safeCoords = [-lat, lng];
+          } 
+          // Case 2: Swapped [Lng, Lat] -> [28, -26]
+          else if (lat > 15 && lat < 35 && lng < -20 && lng > -36) {
+             safeCoords = [lng, lat];
+          }
+          // Case 3: Just positive Lat [Lat, Lng] -> [26, 28]
+          else if (lat > 0 && lat < 40 && lng > 15 && lng < 35) {
+             safeCoords = [-lat, lng];
+          }
+        }
+        return {
+          id: Math.random().toString(36).substr(2, 9),
+          name: aiSub.name,
+          owner: aiSub.owner,
+          address: aiSub.address,
+          coordinates: safeCoords as [number, number],
+          status: 'Active',
+          capacity: aiSub.mvaCapacity ? `${aiSub.mvaCapacity} MVA` : (aiSub.description || 'Verified via AI'),
+          voltageKV: aiSub.voltageKV,
+          mvaCapacity: aiSub.mvaCapacity
+        };
+      });
+
+      if (subs.length === 1) {
+        onAdd({ type: 'direct', value: subs[0].name, payload: subs[0] });
+      } else {
+        onAdd({ type: 'direct', value: 'Imported from AI Search', payload: subs });
+      }
+      setSearchResults([]);
+      setSelectedIndices(new Set());
+    } finally {
+      setIsVerifying(false);
     }
-    setSearchResults([]);
-    setSelectedIndices(new Set());
   };
 
   return (
@@ -130,12 +144,26 @@ export default function SubstationAddForm({ onAdd, onShowCandidates, isSubmittin
               />
               <button 
                 onClick={handleAISearch}
-                disabled={isSearching || !value}
+                disabled={isSearching || isVerifying || !value}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-slate-300 transition-colors"
               >
                 {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
               </button>
             </div>
+
+            {isVerifying && (
+               <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-xl animate-pulse">
+                <Loader2 className="w-3.5 h-3.5 text-indigo-600 animate-spin" />
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest leading-tight">
+                    Harvesting Coordinates...
+                  </span>
+                  <span className="text-[8px] font-bold text-indigo-400 uppercase tracking-tight">
+                    Verifying technical addresses via Maps
+                  </span>
+                </div>
+              </div>
+            )}
 
             {error && (
               <div className="p-3 bg-red-50 border border-red-100 rounded-xl">
@@ -248,10 +276,15 @@ export default function SubstationAddForm({ onAdd, onShowCandidates, isSubmittin
             />
             <button 
               onClick={() => onAdd({ type, value })}
-              disabled={isSubmitting || !value}
+              disabled={isSubmitting || isVerifying || !value}
               className="w-full bg-slate-900 text-white font-black py-4 rounded-xl shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-[10px] uppercase tracking-widest"
             >
-              {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify & Add"}
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Verifying technical data...
+                </>
+              ) : "Verify & Add"}
             </button>
           </div>
         )}

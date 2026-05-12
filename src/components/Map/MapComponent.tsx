@@ -57,6 +57,7 @@ interface MapComponentProps {
   onClearCandidates?: () => void;
   isDiscovering?: boolean;
   isDiscoveringLand?: boolean;
+  discoveryProgress?: { current: number, total: number, status?: string } | null;
   rulerActive: boolean;
   onRulerActiveChange: (active: boolean) => void;
   onOpenDetails?: (property: Property) => void;
@@ -111,6 +112,7 @@ export default function MapComponent(props: MapComponentProps) {
     onClearCandidates,
     isDiscovering,
     isDiscoveringLand,
+    discoveryProgress,
     mapCenterOverride
   } = props;
 
@@ -145,7 +147,8 @@ export default function MapComponent(props: MapComponentProps) {
   // Distance calculations for property-substation lines
   const propertyDistances = useMemo(() => {
     if (substations.length === 0) return [];
-    return properties.map(property => {
+    const allProps = [...properties, ...candidateProperties];
+    return allProps.map(property => {
       let minDistance = Infinity;
       let closestSub = substations[0];
       substations.forEach(sub => {
@@ -157,7 +160,7 @@ export default function MapComponent(props: MapComponentProps) {
       });
       return { property, substation: closestSub, distance: minDistance };
     });
-  }, [properties, substations]);
+  }, [properties, candidateProperties, substations]);
 
   // Create custom icons
   const createSubstationIcon = (sub: Substation, isSelected: boolean) => {
@@ -316,12 +319,9 @@ export default function MapComponent(props: MapComponentProps) {
           <Marker 
             key={sub.id}
             position={[sub.coordinates[0], sub.coordinates[1]]}
-            icon={createCandidateIcon(sub, false, false)}
+            icon={createCandidateIcon(sub, false, selectedSubstation?.id === sub.id)}
             eventHandlers={{
-              click: (e) => {
-                // Leaflet handles click events. For candidate details we'll use a simple confirmation flow or a custom popup if needed.
-                // For now, let's just trigger the select which shows details overlay if implemented.
-              }
+              click: () => onSelectSubstation?.(sub)
             }}
           >
             <Popup className="candidate-popup">
@@ -359,7 +359,10 @@ export default function MapComponent(props: MapComponentProps) {
            <Marker 
             key={p.id}
             position={[p.coordinates[0], p.coordinates[1]]}
-            icon={createCandidateIcon(p, true, false)}
+            icon={createCandidateIcon(p, true, selectedProperty?.id === p.id)}
+            eventHandlers={{
+              click: () => onSelectProperty(p)
+            }}
           >
             <Popup className="candidate-popup">
                <div className="p-3 min-w-[200px]">
@@ -479,6 +482,14 @@ export default function MapComponent(props: MapComponentProps) {
         >
           <Compass className="w-5 h-5" />
         </button>
+
+        <button 
+          onClick={() => onFullscreenChange(!isFullscreen)}
+          className="p-3 rounded-2xl shadow-xl border bg-white text-slate-600 border-slate-200 hover:bg-slate-50 flex items-center justify-center"
+          title={isFullscreen ? "Exit Fullscreen" : "Fullscreen Mode"}
+        >
+          {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+        </button>
       </div>
 
       {/* Discovery Trigger Overlay */}
@@ -567,6 +578,7 @@ export default function MapComponent(props: MapComponentProps) {
         onOpenDetails={onOpenDetails || (() => {})}
         onDiscoverLand={onDiscoverLand}
         isDiscoveringLand={isDiscoveringLand}
+        discoveryProgress={discoveryProgress}
       />
     </div>
   );

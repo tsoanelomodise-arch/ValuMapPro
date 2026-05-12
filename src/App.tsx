@@ -29,7 +29,7 @@ import {
   Maximize2,
   Database
 } from 'lucide-react';
-import { searchVacantLandByLocationName, geocodeLocation, AISubstation } from './services/geminiService';
+import { searchVacantLandByLocationName, geocodeLocation, verifySubstationAddress, AISubstation } from './services/geminiService';
 import { cn } from './lib/utils';
 import { usePersistedState } from './hooks/usePersistedState';
 import { useNotifications } from './hooks/useNotifications';
@@ -149,6 +149,7 @@ export default function App() {
   const handleSelectProperty = useCallback((property: Property) => {
     setSelectedProperty(property);
     setView('map');
+    setIsDetailOpen(true);
   }, []);
 
   const handleSelectSubstation = useCallback((substation: Substation) => {
@@ -245,16 +246,19 @@ export default function App() {
   const handleDiscoverLandStub = () => {}; // Removed old large handler
   const handleDiscoverNearbyStub = () => {}; // Removed old large handler
 
-  const handleAddCandidate = useCallback((candidate: Substation) => {
+  const handleAddCandidate = useCallback(async (candidate: Substation) => {
+    addNotification(`Verifying address for ${candidate.name} via Maps...`, 'info');
+    const verifiedAddress = await verifySubstationAddress(candidate.name, candidate.address);
     const newSub: Substation = {
       ...candidate,
+      address: verifiedAddress,
       id: `sub-${Date.now()}`,
       status: 'Active' // Set to active once confirmed
     };
     setSubstations(prev => [...prev, newSub]);
     setCandidateSubstations(prev => prev.filter(c => c.id !== candidate.id));
     addNotification(`Added ${newSub.name} to infrastructure portfolio.`, 'success');
-  }, [setSubstations, addNotification]);
+  }, [setSubstations, setCandidateSubstations, addNotification]);
 
   const handleAddCandidateProperty = useCallback((candidate: Property) => {
     const newProp: Property = {
@@ -354,133 +358,150 @@ export default function App() {
         if (isRulerActive) setIsRulerActive(false);
       }}
     >
-      <Sidebar 
-        isOpen={isSidebarOpen}
-        view={view as any}
-        activeCategory={activeCategory}
-        onViewChange={(v) => setView(v as any)}
-        onCategoryChange={setActiveCategory}
-        onImportProperty={() => setIsImportModalOpen(true)}
-        onAddSubstation={() => setIsSubstationModalOpen(true)}
-        onRestoreDefaults={handleRestoreDefaults}
-        onShowUserGuide={() => setIsUserGuideOpen(true)}
-      />
-
-      <main className="flex-1 flex flex-col overflow-hidden relative">
-        <AppHeader 
-          isSidebarOpen={isSidebarOpen}
-          toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          onLocationSearch={handleLocationSearch}
-          isGeocoding={isGeocoding}
+      {!isFullscreen && (
+        <Sidebar 
+          isOpen={isSidebarOpen}
+          view={view as any}
+          activeCategory={activeCategory}
+          onViewChange={(v) => {
+            setView(v as any);
+            setIsFullscreen(false);
+          }}
+          onCategoryChange={setActiveCategory}
+          onImportProperty={() => setIsImportModalOpen(true)}
+          onAddSubstation={() => setIsSubstationModalOpen(true)}
+          onRestoreDefaults={handleRestoreDefaults}
+          onShowUserGuide={() => setIsUserGuideOpen(true)}
         />
+      )}
+
+      <main className={cn("flex-1 flex flex-col overflow-hidden relative transition-all duration-500", isFullscreen ? "m-0" : "")}>
+        {!isFullscreen && (
+          <AppHeader 
+            isSidebarOpen={isSidebarOpen}
+            toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            onLocationSearch={handleLocationSearch}
+            isGeocoding={isGeocoding}
+          />
+        )}
 
         <div className="flex-1 flex overflow-hidden relative">
           {/* Spatial Catalog Slide-in/out implementation without problematic motion components for reliability */}
-          <div className="flex-1 flex flex-col p-6 gap-4 overflow-hidden">
-             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <button 
-                    onClick={() => setIsSpatialPanelOpen(!isSpatialPanelOpen)}
-                    className={cn(
-                      "flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[10px] font-black uppercase tracking-[0.2em] z-20 shadow-sm",
-                      isSpatialPanelOpen 
-                        ? "bg-slate-900 text-white border-slate-900 shadow-lg" 
-                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                    )}
-                  >
-                    {isSpatialPanelOpen ? (
-                      <>
-                        <ChevronLeft className="w-3.5 h-3.5" />
-                        Hide Records
-                      </>
-                    ) : (
-                      <>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                        Show Records
-                      </>
-                    )}
-                  </button>
-
-                  {isSpatialPanelOpen && (
-                    <button
-                      onClick={() => setIsSpatialPanelWide(!isSpatialPanelWide)}
+          <div className={cn("flex-1 flex flex-col overflow-hidden relative", isFullscreen ? "p-0" : "p-6 gap-4")}>
+             {!isFullscreen && (
+               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <button 
+                      onClick={() => setIsSpatialPanelOpen(!isSpatialPanelOpen)}
                       className={cn(
-                        "flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[10px] font-black uppercase tracking-[0.2em] z-20",
-                        isSpatialPanelWide
-                          ? "bg-indigo-600 text-white border-indigo-600 shadow-md"
+                        "flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[10px] font-black uppercase tracking-[0.2em] z-20 shadow-sm",
+                        isSpatialPanelOpen 
+                          ? "bg-slate-900 text-white border-slate-900 shadow-lg" 
                           : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                       )}
-                      title={isSpatialPanelWide ? "Narrow View" : "Wide View"}
                     >
-                      {isSpatialPanelWide ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-                      {isSpatialPanelWide ? "Narrow Index" : "Expand Index"}
+                      {isSpatialPanelOpen ? (
+                        <>
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                          Hide Records
+                        </>
+                      ) : (
+                        <>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                          Show Records
+                        </>
+                      )}
                     </button>
-                  )}
-                  <div className="h-4 w-px bg-slate-200 mx-1 hidden md:block" />
-                  <div>
-                    <h1 className="text-xl font-bold text-slate-800 tracking-tight">
-                      {view === 'map' ? 'Spatial Intelligence View' : (activeCategory === 'properties' ? 'Properties' : 'Substations')}
-                    </h1>
-                    <p className="text-slate-500 text-xs mt-1">Analyzing {activeCategory === 'properties' ? allFilteredProperties.length : allFilteredSubstations.length} records</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center bg-white p-1 rounded-xl shadow-sm border border-slate-200">
-                  <button
-                    onClick={() => setView('map')}
-                    className={cn(
-                      "flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] transition-all",
-                      view === 'map' ? "bg-slate-900 text-white shadow-md shadow-slate-200" : "text-slate-500 hover:bg-slate-50"
-                    )}
-                  >
-                    <Plus className={cn("w-3.5 h-3.5", view === 'map' ? "text-indigo-400" : "text-slate-400")} />
-                    Spatial Index
-                  </button>
-                  <button
-                    onClick={() => setView('list')}
-                    className={cn(
-                      "flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] transition-all",
-                      view === 'list' ? "bg-slate-900 text-white shadow-md shadow-slate-200" : "text-slate-500 hover:bg-slate-50"
-                    )}
-                  >
-                    <Search className={cn("w-3.5 h-3.5", view === 'list' ? "text-indigo-400" : "text-slate-400")} />
-                    Catalog View
-                  </button>
-                </div>
-             </div>
 
-            <div className="flex-1 relative overflow-hidden">
+                    {isSpatialPanelOpen && (
+                      <button
+                        onClick={() => setIsSpatialPanelWide(!isSpatialPanelWide)}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[10px] font-black uppercase tracking-[0.2em] z-20",
+                          isSpatialPanelWide
+                            ? "bg-indigo-600 text-white border-indigo-600 shadow-md"
+                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                        )}
+                        title={isSpatialPanelWide ? "Narrow View" : "Wide View"}
+                      >
+                        {isSpatialPanelWide ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                        {isSpatialPanelWide ? "Narrow Index" : "Expand Index"}
+                      </button>
+                    )}
+                    <div className="h-4 w-px bg-slate-200 mx-1 hidden md:block" />
+                    <div>
+                      <h1 className="text-xl font-bold text-slate-800 tracking-tight">
+                        {view === 'map' ? 'Spatial Intelligence View' : (activeCategory === 'properties' ? 'Properties' : 'Substations')}
+                      </h1>
+                      <p className="text-slate-500 text-xs mt-1">Analyzing {activeCategory === 'properties' ? allFilteredProperties.length : allFilteredSubstations.length} records</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center bg-white p-1 rounded-xl shadow-sm border border-slate-200">
+                    <button
+                      onClick={() => {
+                      setView('map');
+                      setIsFullscreen(false);
+                    }}
+                      className={cn(
+                        "flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] transition-all",
+                        view === 'map' ? "bg-slate-900 text-white shadow-md shadow-slate-200" : "text-slate-500 hover:bg-slate-50"
+                      )}
+                    >
+                      <Plus className={cn("w-3.5 h-3.5", view === 'map' ? "text-indigo-400" : "text-slate-400")} />
+                      Spatial Index
+                    </button>
+                    <button
+                      onClick={() => {
+                      setView('list');
+                      setIsFullscreen(false);
+                    }}
+                      className={cn(
+                        "flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] transition-all",
+                        view === 'list' ? "bg-slate-900 text-white shadow-md shadow-slate-200" : "text-slate-500 hover:bg-slate-50"
+                      )}
+                    >
+                      <Search className={cn("w-3.5 h-3.5", view === 'list' ? "text-indigo-400" : "text-slate-400")} />
+                      Catalog View
+                    </button>
+                  </div>
+               </div>
+             )}
+
+            <div className={cn("flex-1 relative overflow-hidden", isFullscreen ? "h-full w-full" : "")}>
                {view === 'map' ? (
                  <div className="absolute inset-0 flex">
-                   <div className={cn(
-                     "h-full overflow-hidden shrink-0 transition-all duration-500 ease-in-out relative",
-                     !isSpatialPanelOpen ? "w-0 opacity-0 pointer-events-none mr-0" : 
-                     isSpatialPanelWide ? "w-[500px] opacity-100 mr-4" : "w-80 opacity-100 mr-4"
-                   )}>
+                   {!isFullscreen && (
                      <div className={cn(
-                       "h-full border border-slate-100 rounded-2xl shadow-sm bg-white overflow-hidden transition-all duration-500",
-                       isSpatialPanelWide ? "w-[500px]" : "w-80"
+                       "h-full overflow-hidden shrink-0 transition-all duration-500 ease-in-out relative",
+                       !isSpatialPanelOpen ? "w-0 opacity-0 pointer-events-none mr-0" : 
+                       isSpatialPanelWide ? "w-[500px] opacity-100 mr-4" : "w-80 opacity-100 mr-4"
                      )}>
-                       <SpatialCatalog 
-                         properties={filteredProperties}
-                         candidateProperties={filteredCandidateProperties}
-                         substations={filteredSubstations}
-                         candidateSubstations={filteredCandidateSubstations}
-                         selectedPropertyId={selectedProperty?.id}
-                         selectedSubstationId={selectedSubstation?.id}
-                         hiddenPropertyIds={hiddenPropertyIds}
-                         onToggleVisibility={togglePropertyVisibility}
-                         onDeleteCandidateProperty={handleDeleteCandidateProperty}
-                         onSelectProperty={handleSelectProperty}
-                         onOpenDetails={handleOpenDetails}
-                         onSelectSubstation={handleSelectSubstation}
-                         searchQuery={searchQuery}
-                         setSearchQuery={setSearchQuery}
-                       />
+                       <div className={cn(
+                         "h-full border border-slate-100 rounded-2xl shadow-sm bg-white overflow-hidden transition-all duration-500",
+                         isSpatialPanelWide ? "w-[500px]" : "w-80"
+                       )}>
+                         <SpatialCatalog 
+                           properties={filteredProperties}
+                           candidateProperties={filteredCandidateProperties}
+                           substations={filteredSubstations}
+                           candidateSubstations={filteredCandidateSubstations}
+                           selectedPropertyId={selectedProperty?.id}
+                           selectedSubstationId={selectedSubstation?.id}
+                           hiddenPropertyIds={hiddenPropertyIds}
+                           onToggleVisibility={togglePropertyVisibility}
+                           onDeleteCandidateProperty={handleDeleteCandidateProperty}
+                           onSelectProperty={handleSelectProperty}
+                           onOpenDetails={handleOpenDetails}
+                           onSelectSubstation={handleSelectSubstation}
+                           searchQuery={searchQuery}
+                           setSearchQuery={setSearchQuery}
+                         />
+                       </div>
                      </div>
-                   </div>
+                   )}
                    
                    <div className="flex-1 relative">
                      <MapComponent 
@@ -505,6 +526,7 @@ export default function App() {
                         }}
                         isDiscovering={isDiscovering}
                         isDiscoveringLand={isDiscoveringLand}
+                        discoveryProgress={discoveryProgress}
                         rulerActive={isRulerActive}
                         onRulerActiveChange={setIsRulerActive}
                         onOpenDetails={handleOpenDetails}
@@ -558,54 +580,54 @@ export default function App() {
                 MARKET DATA ACTIVE
              </div>
           </div>
-
-          {selectedProperty && isDetailOpen && (
-            <div 
-              className="fixed right-0 top-0 h-full w-full lg:w-[600px] xl:w-[700px] bg-white border-l border-slate-200 shadow-2xl z-[6000] flex flex-col transition-transform duration-300 transform translate-x-0"
-            >
-                <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-white">
-                  <div className="flex items-center gap-4">
-                    <div>
-                      <span className="text-[9px] font-bold tracking-widest text-slate-400 uppercase">Evaluation Dashboard</span>
-                      <h2 className="text-xl font-bold text-slate-900 tracking-tight truncate max-w-[200px] sm:max-w-xs">{selectedProperty.name}</h2>
-                    </div>
-                    {(selectedProperty.p24Url || selectedProperty.listingNumber) && (
-                      <a 
-                        href={selectedProperty.p24Url || `https://www.property24.com/for-sale/${selectedProperty.address.suburb.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${selectedProperty.address.city.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${(selectedProperty.address as any).province?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'gauteng'}/${selectedProperty.listingNumber}`} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-lg text-[10px] font-bold border border-slate-200 hover:bg-slate-100 transition-colors uppercase tracking-widest"
-                      >
-                        <ExternalLink className="w-3 h-3" /> P24
-                      </a>
-                    )}
-                  </div>
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsDetailOpen(false);
-                    }}
-                    className="p-2 hover:bg-slate-50 rounded-lg transition-colors border border-slate-200 text-slate-400 hover:text-slate-900"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                
-                <div className="flex-1 overflow-hidden">
-                    <EvaluationDashboard 
-                      property={selectedProperty} 
-                      substations={substations}
-                      onDeleteProperty={setPropertyToDelete}
-                      onDeleteCandidate={handleDeleteCandidateProperty}
-                      onUpdateProperty={handleUpdateProperty}
-                      onAddCandidate={handleAddLandToPortfolio}
-                      initialEditMode={isEditingRequested}
-                    />
-                </div>
-              </div>
-          )}
         </div>
       </main>
+
+      {selectedProperty && isDetailOpen && (
+        <div 
+          className="fixed right-0 top-0 h-full w-full lg:w-[600px] xl:w-[700px] bg-white border-l border-slate-200 shadow-2xl z-[6000] flex flex-col transition-transform duration-300 transform translate-x-0"
+        >
+            <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-white">
+              <div className="flex items-center gap-4">
+                <div>
+                  <span className="text-[9px] font-bold tracking-widest text-slate-400 uppercase">Evaluation Dashboard</span>
+                  <h2 className="text-xl font-bold text-slate-900 tracking-tight truncate max-w-[200px] sm:max-w-xs">{selectedProperty.name}</h2>
+                </div>
+                {(selectedProperty.p24Url || selectedProperty.listingNumber) && (
+                  <a 
+                    href={selectedProperty.p24Url || `https://www.property24.com/for-sale/${selectedProperty.address.suburb.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${selectedProperty.address.city.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${(selectedProperty.address as any).province?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'gauteng'}/${selectedProperty.listingNumber}`} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-lg text-[10px] font-bold border border-slate-200 hover:bg-slate-100 transition-colors uppercase tracking-widest"
+                  >
+                    <ExternalLink className="w-3 h-3" /> P24
+                  </a>
+                )}
+              </div>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsDetailOpen(false);
+                }}
+                className="p-2 hover:bg-slate-50 rounded-lg transition-colors border border-slate-200 text-slate-400 hover:text-slate-900"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-hidden">
+                <EvaluationDashboard 
+                  property={selectedProperty} 
+                  substations={substations}
+                  onDeleteProperty={setPropertyToDelete}
+                  onDeleteCandidate={handleDeleteCandidateProperty}
+                  onUpdateProperty={handleUpdateProperty}
+                  onAddCandidate={handleAddLandToPortfolio}
+                  initialEditMode={isEditingRequested}
+                />
+            </div>
+          </div>
+      )}
 
           {isUserGuideOpen && (
         <UserGuideModal onClose={() => setIsUserGuideOpen(false)} />

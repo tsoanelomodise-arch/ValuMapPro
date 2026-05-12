@@ -72,3 +72,35 @@
   - Optimized viewport handling: Resolved "gray tile" and rendering issues during structural index resizing.
   - Retained advanced features: Ruler measuring, 1km discovery radius visualization, and Earth View integrations remain functional within the restored engine.
   - Removed dependency on Google Maps Platform API keys to prevent service interruptions.
+
+- **v2.1 (2026-05-11)**: UI/UX Refinement.
+  - Implemented Fullscreen Mode: Re-enabled the mission-critical fullscreen toggle for the Spatial Intelligence View.
+  - Restored dynamic layout: Fullscreen mode now correctly hides the Sidebar, AppHeader, and Spatial Index to maximize map real estate.
+  - Improved UI Overlays: Added high-visibility toggles for measurement, satellite, and fullscreen modes in the leaflet engine.
+  - Fixed regression where markers were occasionally obscured by candidate popups in high-density areas.
+
+- **v2.2 (2026-05-11)**: Discovery Accuracy & Hallucination Prevention.
+  - Hardened AI Prompts: Implemented strict verification protocols for Property24 listings to prevent the generation of non-existent URLs.
+  - Search Tool Primacy: Forced the AI engine to exclusively return listings found within the active Google Search result stream.
+  - Improved Data Verification: Added HTML-level availability checks during property import to identify and discard stale listings.
+  - Precise Coordinate Mandate: Removed approximate coordinate jitter logic; candidates are now only accepted if high-precision GPS data is verifiable.
+  - Data Utility Thresholding: Implemented a mandatory "Usable Information" filter. Any Property24 listing missing critical evaluation data (Price, Stand Size, or Description > 50 chars) is automatically discarded.
+  - Hardened Extraction Schema: Forced the AI engine to treat financial and physical specification fields as "Required" to prevent the import of empty property shells.
+  - Improved Proxy Diagnostics: Enhanced logging for failed proxy fetches to better distinguish between network issues and stale listings.
+
+- **v2.3 (2026-05-11)**: Infrastructure Data Integrity.
+  - Integrated Google Maps verification for all substation imports.
+  - Implemented background AI Search Grounding to cross-reference and correct substation physical addresses.
+  - Added real-time user notifications for technical data verification phases.
+  - Hardened candidate import logic to ensure 100% address accuracy before formal inclusion in the spatial catalog.
+
+- **v2.5 (2026-05-11)**: Regional Hardening & Verification Feedback.
+  - Implemented strict domain-level filtering to permanently exclude `property24.co.ke` and other non-SA regions.
+  - Enhanced Substation Add UI with explicit "Harvesting Coordinates" status messaging.
+  - Hardened AI Extraction rules to further prioritize South African localized data.
+
+- **v2.4 (2026-05-11)**: Multi-Source & Regional Integrity.
+  - Expanded spatial catalog harvesting to include `privateproperty.co.za`.
+  - Hardened regional constraints: Absolute exclusion of non-South African listings (Kenya/Nigeria) via strict URL filtering and AI prompt "locking".
+  - Real-time Status Overlay: Implemented granular status reporting during the property harvesting phase (e.g., "Harvesting listing X/Y...").
+  - Enhanced UI transparency: The discovery button now displays live verification steps to keep the user informed.
