@@ -4,7 +4,6 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { mockProperties } from './data/mockProperties';
 import { Property, Substation } from './types';
 import MapComponent from './components/Map/MapComponent';
 import EvaluationDashboard from './components/PropertyDetail/EvaluationDashboard';
@@ -41,31 +40,8 @@ import SubstationAddForm from './components/Modals/SubstationAddForm';
 import { UserGuideModal } from './components/Modals/UserGuideModal';
 
 export default function App() {
-  const [properties, setProperties] = usePersistedState<Property[]>('propscope_properties', mockProperties);
-  const [substations, setSubstations] = usePersistedState<Substation[]>('propscope_substations', [
-    {
-      id: 'sub-1',
-      name: 'Rosebank Distribution',
-      address: '15 Baker St, Rosebank, Johannesburg',
-      coordinates: [-26.1311, 28.0536],
-      status: 'Active',
-      capacity: '44kV / 11kV',
-      mvaCapacity: 20,
-      voltageKV: 11,
-      availableAmps: 1049.7
-    },
-    {
-      id: 'sub-2',
-      name: 'Sandton Main',
-      address: 'Grayston Dr, Sandton',
-      coordinates: [-26.1011, 28.0566],
-      status: 'Active',
-      capacity: '132kV / 11kV',
-      mvaCapacity: 45,
-      voltageKV: 11,
-      availableAmps: 2361.9
-    }
-  ]);
+  const [properties, setProperties] = usePersistedState<Property[]>('propscope_properties', []);
+  const [substations, setSubstations] = usePersistedState<Substation[]>('propscope_substations', []);
 
   const [view, setView] = useState<'map' | 'list'>('map');
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -301,12 +277,15 @@ export default function App() {
     }
   }, [pendingProperty, setProperties]);
 
-  const handleRestoreDefaults = useCallback(() => {
-    if (confirm("Restore all mock properties? This will clear your current changes.")) {
-      setProperties(mockProperties);
+  const handleClearCatalog = useCallback(() => {
+    if (confirm("Clear all records and candidates? This action cannot be undone.")) {
+      setProperties([]);
       setSubstations([]);
+      setCandidateProperties([]);
+      setCandidateSubstations([]);
+      addNotification("Spatial catalog cleared.", "info");
     }
-  }, [setProperties, setSubstations]);
+  }, [setProperties, setSubstations, setCandidateProperties, setCandidateSubstations, addNotification]);
 
   const handleUpdateProperty = useCallback((updatedProperty: Property) => {
     setProperties(prev => prev.map(p => p.id === updatedProperty.id ? updatedProperty : p));
@@ -370,7 +349,7 @@ export default function App() {
           onCategoryChange={setActiveCategory}
           onImportProperty={() => setIsImportModalOpen(true)}
           onAddSubstation={() => setIsSubstationModalOpen(true)}
-          onRestoreDefaults={handleRestoreDefaults}
+          onRestoreDefaults={handleClearCatalog}
           onShowUserGuide={() => setIsUserGuideOpen(true)}
         />
       )}

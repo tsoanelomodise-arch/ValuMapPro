@@ -16,6 +16,9 @@ This project is a professional property evaluation tool for solar/electrical inf
 - **Lock Down**: This system's core map and coordinate handling are in a "Locked" state. Major deviations from the `MapComponent.tsx` architecture require explicit justification.
 
 ## Release History
+- **v2.7 (2026-05-12)**: Clean Slate Deployment.
+  - Removed all mock data from initial state.
+  - Switched Reset to Clear Catalog (complete wipe).
 - **v2.6 (2026-05-12)**: Infrastructure Search Hardening.
   - Hardened AI Substation search grounding.
   - Implemented "Technical Discovery Protocol" for niche areas.

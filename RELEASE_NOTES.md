@@ -88,6 +88,11 @@
   - Hardened Extraction Schema: Forced the AI engine to treat financial and physical specification fields as "Required" to prevent the import of empty property shells.
   - Improved Proxy Diagnostics: Enhanced logging for failed proxy fetches to better distinguish between network issues and stale listings.
 
+- **v2.7 (2026-05-12)**: Clean Slate Deployment.
+  - Removed all hardcoded mock properties and substations from the initial application state.
+  - Implemented "Clean Slate" policy: new deployments now start with an empty spatial catalog to prevent unwanted sample data.
+  - Refactored Reset functionality into "Clear Catalog": added a comprehensive data wipe tool to the Sidebar.
+
 - **v2.6 (2026-05-12)**: Infrastructure Search Hardening.
   - Refactored AI Substation Search with "Technical Discovery Protocol" to improve reliability for niche location queries (e.g., street-level searches).
   - Implemented regional fallbacks for AI search: the system now broader its scan to the surrounding district if immediate results are sparse.
