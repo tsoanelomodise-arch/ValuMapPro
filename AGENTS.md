@@ -16,6 +16,9 @@ This project is a professional property evaluation tool for solar/electrical inf
 - **Lock Down**: This system's core map and coordinate handling are in a "Locked" state. Major deviations from the `MapComponent.tsx` architecture require explicit justification.
 
 ## Release History
+- **v2.6 (2026-05-12)**: Infrastructure Search Hardening.
+  - Hardened AI Substation search grounding.
+  - Implemented "Technical Discovery Protocol" for niche areas.
 - **v2.4 (2026-05-11)**: Multi-Source Regional Lockdown.
   - Integrated `privateproperty.co.za` support.
   - Hardened South African regional filters for all harvesting operations.

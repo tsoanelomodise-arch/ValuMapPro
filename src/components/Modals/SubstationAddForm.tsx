@@ -27,7 +27,7 @@ export default function SubstationAddForm({ onAdd, onShowCandidates, isSubmittin
     try {
       const results = await searchSubstations(value);
       if (results.length === 0) {
-        setError("No substations found for this area. Try a more specific location.");
+        setError("No direct substation matches found for this specific area. Try searching for the broader suburb or city name.");
       }
       setSearchResults(results);
     } catch (error) {

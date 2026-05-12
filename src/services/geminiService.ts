@@ -72,13 +72,15 @@ export async function searchSubstations(area: string): Promise<AISubstation[]> {
     model: MODEL_NAME,
     contents: [{ role: 'user', parts: [{ text: `Search for real Eskom or Municipal electrical substations in or near "${area}", South Africa.
       
-      CROSS-REFERENCE REQUIREMENT:
-      Use Google Search to cross-reference with Google Maps satellite imagery and Google Earth infrastructure data to ensure these substations exist and have precise coordinates.
+      TECHNICAL DISCOVERY PROTOCOL:
+      1. Use Google Search grounding to find official Eskom or Municipal infrastructure lists for "${area}".
+      2. Cross-reference with technical maps and Google Earth landmarks to ensure precision.
+      3. If "${area}" is a small suburb or street, search for the larger surrounding region (e.g. city or district) to ensure useful results are returned.
       
-      CRITICAL:
-      1. Coordinates MUST be precise [lat, lng] verified against Google Maps.
-      2. Verify the substation actually belongs to "${area}".
-      3. Names must be real (e.g., "Bryant Substation", "Ekurhuleni North").
+      CRITICAL VALIDATION:
+      - Coordinates MUST be precise [lat, lng].
+      - Substations MUST be real physical entities (e.g., "Bryant Substation", "Centurion Central").
+      - If no precise substations are found in the immediate area, return the nearest major transmission substations.
       
       Return JSON: name, owner, address, coordinates [lat, lng], voltageKV, mvaCapacity, description.` }]}],
     tools: [{ googleSearch: {} }],
@@ -109,7 +111,7 @@ export async function searchSubstations(area: string): Promise<AISubstation[]> {
     }
   });
 
-  return data?.substations || [];
+  return (data?.substations || []).filter(s => s.name && s.address);
 }
 
 export async function searchSubstationsByArea(north: number, south: number, east: number, west: number): Promise<AISubstation[]> {

@@ -88,11 +88,11 @@
   - Hardened Extraction Schema: Forced the AI engine to treat financial and physical specification fields as "Required" to prevent the import of empty property shells.
   - Improved Proxy Diagnostics: Enhanced logging for failed proxy fetches to better distinguish between network issues and stale listings.
 
-- **v2.3 (2026-05-11)**: Infrastructure Data Integrity.
-  - Integrated Google Maps verification for all substation imports.
-  - Implemented background AI Search Grounding to cross-reference and correct substation physical addresses.
-  - Added real-time user notifications for technical data verification phases.
-  - Hardened candidate import logic to ensure 100% address accuracy before formal inclusion in the spatial catalog.
+- **v2.6 (2026-05-12)**: Infrastructure Search Hardening.
+  - Refactored AI Substation Search with "Technical Discovery Protocol" to improve reliability for niche location queries (e.g., street-level searches).
+  - Implemented regional fallbacks for AI search: the system now broader its scan to the surrounding district if immediate results are sparse.
+  - Hardened JSON extraction logic to prevent "Search Hallucination" on the published production build.
+  - Updated UI error messaging to guide users towards more effective location queries.
 
 - **v2.5 (2026-05-11)**: Regional Hardening & Verification Feedback.
   - Implemented strict domain-level filtering to permanently exclude `property24.co.ke` and other non-SA regions.
@@ -104,3 +104,9 @@
   - Hardened regional constraints: Absolute exclusion of non-South African listings (Kenya/Nigeria) via strict URL filtering and AI prompt "locking".
   - Real-time Status Overlay: Implemented granular status reporting during the property harvesting phase (e.g., "Harvesting listing X/Y...").
   - Enhanced UI transparency: The discovery button now displays live verification steps to keep the user informed.
+
+- **v2.3 (2026-05-11)**: Infrastructure Data Integrity.
+  - Integrated Google Maps verification for all substation imports.
+  - Implemented background AI Search Grounding to cross-reference and correct substation physical addresses.
+  - Added real-time user notifications for technical data verification phases.
+  - Hardened candidate import logic to ensure 100% address accuracy before formal inclusion in the spatial catalog.
