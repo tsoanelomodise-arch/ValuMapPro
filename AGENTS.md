@@ -3,7 +3,7 @@
 This project is a professional property evaluation tool for solar/electrical infrastructure in South Africa.
 
 ## Core System Architecture
-- **Tech Stack**: React 19, Vite, Leaflet, Express (for API proxying), Gemini AI (Grounding).
+- **Tech Stack**: React 19, Vite, Leaflet, Gemini AI (Grounding).
 - **AI Model**: **MUST** use `gemini-3-flash-preview` for search grounding. It has proven significantly more reliable for finding South African property and substation data than older models.
 - **Coordinate Handling**: Always verify coordinates are valid arrays `[lat, lng]` before using them in map functions.
 - **Vite Setup**: The map uses `react-leaflet`. Ensure container size is controlled during sliding animations to prevent leaflet "gray tiles" or viewport issues.
@@ -16,6 +16,10 @@ This project is a professional property evaluation tool for solar/electrical inf
 - **Lock Down**: This system's core map and coordinate handling are in a "Locked" state. Major deviations from the `MapComponent.tsx` architecture require explicit justification.
 
 ## Release History
+- **v3.0 (2026-05-20)**: Serverless / Pure Client-Side Migration.
+  - Removed custom Node.js Express server (`server.ts`) completely.
+  - Configured Vite with hardcoded dev server port `3000` and host `0.0.0.0`.
+  - Added seamless fallback to Google Search grounding when importing property URLs.
 - **v2.11 (2026-05-12)**: Import Hardening.
   - Fixed property listing number import bug.
 - **v2.10 (2026-05-12)**: Infrastructure Search UX Refactor.

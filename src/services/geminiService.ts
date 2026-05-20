@@ -2,7 +2,9 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Property, Substation } from "../types";
 
 const getAI = () => {
-  const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || "";
+  const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || 
+                 (import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) || 
+                 "";
   if (!apiKey) {
     console.error("GEMINI_API_KEY is not defined in the environment. AI features will fail.");
     return null;
@@ -308,7 +310,7 @@ export async function importPropertyListing(input: string): Promise<Property | n
   if (processedInput.startsWith('http') && (isP24SA || isPrivateProperty)) {
     try {
       const fetchRes = await fetch(`/api/fetch-listing?url=${encodeURIComponent(processedInput)}`);
-      if (fetchRes.ok) {
+      if (fetchRes.ok && fetchRes.headers.get("Content-Type")?.includes("html")) {
         html = await fetchRes.text();
         
         // Check for specific markers in the raw HTML that suggest the listing is gone
@@ -326,10 +328,10 @@ export async function importPropertyListing(input: string): Promise<Property | n
           return null;
         }
       } else {
-        console.warn(`Proxy fetch failed with status: ${fetchRes.status}`);
+        console.info(`Proxy fetch skipped or unsupported (status: ${fetchRes.status}). Falling back to Google Search grounding for extraction...`);
       }
     } catch (e) {
-      console.warn("Proxy fetch failed", e);
+      console.warn("Direct HTML proxy parse skipped, fallback to Google Search grounding extraction instead.", e);
     }
   }
 

@@ -88,6 +88,13 @@
   - Hardened Extraction Schema: Forced the AI engine to treat financial and physical specification fields as "Required" to prevent the import of empty property shells.
   - Improved Proxy Diagnostics: Enhanced logging for failed proxy fetches to better distinguish between network issues and stale listings.
 
+- **v3.0 (2026-05-20)**: Serverless / Pure Client-Side Migration.
+  - Eliminated the runtime Node.js custom Express server (`server.ts`) completely.
+  - Migrated the application to run as a pure client-side SPA (Single Page Application) with zero runtime Node server dependencies.
+  - Hardened property listing imports: if direct browser calls fail due to CORS, the system seamlessly redirects the URL extraction to Gemini's native Google Search grounding tool.
+  - Updated `vite.config.ts` to hardcode server port `3000` and host `0.0.0.0` directly in the Vite configuration to guarantee compliance with container sandbox rules.
+  - Created `/src/vite-env.d.ts` reference directory to cleanly compile `import.meta.env` with TypeScript types.
+
 - **v2.11 (2026-05-12)**: Import Hardening.
   - Fixed property import failure when using raw Property24 listing numbers.
   - Implemented automatic URL normalization for numeric listing identifiers.
