@@ -81,7 +81,7 @@ export default function MapDetailsOverlay({
                     onClick={(e) => e.stopPropagation()}
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
-                    View {property.p24Url?.includes('privateproperty') ? 'Private Property' : 'Property24'} Listing
+                    View Property24 Listing
                   </a>
                 </div>
               )}

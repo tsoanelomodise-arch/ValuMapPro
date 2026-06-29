@@ -88,6 +88,17 @@
   - Hardened Extraction Schema: Forced the AI engine to treat financial and physical specification fields as "Required" to prevent the import of empty property shells.
   - Improved Proxy Diagnostics: Enhanced logging for failed proxy fetches to better distinguish between network issues and stale listings.
 
+- **v3.2 (2026-06-29)**: Client-Side Activation Hardening (Custom Domain Support).
+  - Implemented dynamic fallback to client-side API Keys via browser `localStorage` (`propscope_gemini_api_key`) to resolve search/discovery issues on custom domains like `https://valuemap.wonderlandstudio.co.za/`.
+  - Added a highly polished, non-intrusive Warning Banner at the header when the required `GEMINI_API_KEY` is not present in the static build context, providing immediate setup actions.
+  - Engineered a secure, native ApiKeyModal configuration utility to securely save developer keys locally, fully powering the Google Search Grounding and Substation Discovery mechanisms.
+  - Linked API configuration directly to bottom of Sidebar navigation for permanent key modification and rotation options.
+
+- **v3.1 (2026-06-29)**: Portal Lock Down (Strict Property24 Focus).
+  - Restricted all property imports, automated harvesting, and spatial catalog searches exclusively to `property24.com`.
+  - Removed all references, support, and domain check logic for `privateproperty.co.za` to enforce portal lock down rules.
+  - Simplified UI listing reference links and overlays to target the unified Property24 format.
+
 - **v3.0 (2026-05-20)**: Serverless / Pure Client-Side Migration.
   - Eliminated the runtime Node.js custom Express server (`server.ts`) completely.
   - Migrated the application to run as a pure client-side SPA (Single Page Application) with zero runtime Node server dependencies.

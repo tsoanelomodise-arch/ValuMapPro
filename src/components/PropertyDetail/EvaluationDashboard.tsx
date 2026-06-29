@@ -188,7 +188,7 @@ export default function EvaluationDashboard({
                         rel="noopener noreferrer"
                         className="text-[10px] font-bold text-slate-400 hover:text-blue-600 transition-colors uppercase tracking-widest flex items-center gap-1"
                       >
-                        {p24Url.toLowerCase().includes('privateproperty') ? 'Private Property' : 'Property24'} <ExternalLink className="w-2.5 h-2.5" />
+                        Property24 <ExternalLink className="w-2.5 h-2.5" />
                       </a>
                     )}
 
@@ -311,7 +311,7 @@ export default function EvaluationDashboard({
                         {item.val}
                         <ExternalLink className="w-4 h-4" />
                         <span className="text-[8px] font-black uppercase tracking-tighter text-slate-400 no-underline">
-                          ({p24Url?.toLowerCase().includes('privateproperty') ? 'PP' : 'P24'})
+                          (P24)
                         </span>
                       </a>
                     ) : (

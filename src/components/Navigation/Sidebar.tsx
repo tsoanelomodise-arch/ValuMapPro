@@ -7,7 +7,8 @@ import {
   Settings, 
   User,
   Zap,
-  Info 
+  Info,
+  Key
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -21,6 +22,7 @@ interface SidebarProps {
   onAddSubstation: () => void;
   onRestoreDefaults: () => void;
   onShowUserGuide: () => void;
+  onConfigureApiKey: () => void;
 }
 
 export function Sidebar({ 
@@ -32,7 +34,8 @@ export function Sidebar({
   onImportProperty, 
   onAddSubstation, 
   onRestoreDefaults,
-  onShowUserGuide 
+  onShowUserGuide,
+  onConfigureApiKey
 }: SidebarProps) {
   return (
     <aside className={cn(
@@ -108,6 +111,12 @@ export function Sidebar({
           icon={<Info />} 
           label="Guide" 
           onClick={onShowUserGuide} 
+          isOpen={isOpen}
+        />
+        <SidebarLink 
+          icon={<Key />} 
+          label="API Key" 
+          onClick={onConfigureApiKey} 
           isOpen={isOpen}
         />
         <SidebarLink 

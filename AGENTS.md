@@ -16,6 +16,13 @@ This project is a professional property evaluation tool for solar/electrical inf
 - **Lock Down**: This system's core map and coordinate handling are in a "Locked" state. Major deviations from the `MapComponent.tsx` architecture require explicit justification.
 
 ## Release History
+- **v3.2 (2026-06-29)**: Client-Side Activation Hardening (Custom Domain Support).
+  - Implemented dynamic fallback to client-side API Keys via browser `localStorage` to resolve search/discovery issues on custom domains.
+  - Added visual setup warning banner at the top of the workspace.
+  - Integrated secure client-side API key modal linked to Sidebar navigation.
+- **v3.1 (2026-06-29)**: Portal Lock Down (Strict Property24 Focus).
+  - Restricted all property listing imports and automated discovery harvesting exclusively to `property24.com`.
+  - Removed all references and support for `privateproperty.co.za` to enforce portal lockdown rules.
 - **v3.0 (2026-05-20)**: Serverless / Pure Client-Side Migration.
   - Removed custom Node.js Express server (`server.ts`) completely.
   - Configured Vite with hardcoded dev server port `3000` and host `0.0.0.0`.

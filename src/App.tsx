@@ -28,7 +28,7 @@ import {
   Maximize2,
   Database
 } from 'lucide-react';
-import { searchVacantLandByLocationName, geocodeLocation, verifySubstationAddress, AISubstation } from './services/geminiService';
+import { searchVacantLandByLocationName, geocodeLocation, verifySubstationAddress, AISubstation, hasGeminiKey } from './services/geminiService';
 import { cn } from './lib/utils';
 import { usePersistedState } from './hooks/usePersistedState';
 import { useNotifications } from './hooks/useNotifications';
@@ -37,6 +37,7 @@ import { useImport } from './hooks/useImport';
 
 import SubstationEditModal from './components/Modals/SubstationEditModal';
 import { UserGuideModal } from './components/Modals/UserGuideModal';
+import { ApiKeyModal } from './components/Modals/ApiKeyModal';
 
 export default function App() {
   const [properties, setProperties] = usePersistedState<Property[]>('propscope_properties', []);
@@ -45,6 +46,8 @@ export default function App() {
   const [view, setView] = useState<'map' | 'list'>('map');
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isUserGuideOpen, setIsUserGuideOpen] = useState(false);
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [keyStateUpdated, setKeyStateUpdated] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [selectedSubstation, setSelectedSubstation] = useState<Substation | null>(null);
@@ -362,6 +365,7 @@ export default function App() {
           }}
           onRestoreDefaults={handleClearCatalog}
           onShowUserGuide={() => setIsUserGuideOpen(true)}
+          onConfigureApiKey={() => setIsApiKeyModalOpen(true)}
         />
       )}
 
@@ -375,6 +379,23 @@ export default function App() {
             onLocationSearch={handleLocationSearch}
             isGeocoding={isGeocoding}
           />
+        )}
+
+        {!isFullscreen && !hasGeminiKey() && (
+          <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex items-center justify-between gap-4 shrink-0">
+            <div className="flex items-center gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+              <p className="text-xs font-semibold text-amber-800 leading-relaxed">
+                Gemini API Key Required: Complete setup is needed to enable Eskom/Municipal substation search and Property24 spatial discovery.
+              </p>
+            </div>
+            <button 
+              onClick={() => setIsApiKeyModalOpen(true)}
+              className="bg-amber-900 hover:bg-black text-white text-[9px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors shrink-0"
+            >
+              Configure API Key
+            </button>
+          </div>
         )}
 
         <div className="flex-1 flex overflow-hidden relative">
@@ -627,6 +648,13 @@ export default function App() {
         <UserGuideModal onClose={() => setIsUserGuideOpen(false)} />
       )}
 
+      {isApiKeyModalOpen && (
+        <ApiKeyModal 
+          onClose={() => setIsApiKeyModalOpen(false)} 
+          onSaved={() => setKeyStateUpdated(prev => prev + 1)}
+        />
+      )}
+
       {discoveryProgress && (
         <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[9999] w-full max-w-md px-6 animate-in fade-in slide-in-from-top-5 duration-300">
           <div className="bg-slate-900/95 backdrop-blur-xl rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-white/10 p-5 ring-1 ring-white/5">
@@ -852,7 +880,7 @@ export default function App() {
                       referrerPolicy="no-referrer"
                       className="text-[10px] font-black text-blue-600 hover:underline flex items-center gap-1.5 px-3 py-1 bg-blue-50 rounded-lg transition-colors"
                     >
-                      View on {pendingProperty.p24Url.includes('privateproperty') ? 'Private Property' : 'Property24'}
+                      View on Property24
                       <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>

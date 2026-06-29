@@ -2,15 +2,38 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Property, Substation } from "../types";
 
 const getAI = () => {
-  const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || 
+  const apiKey = (typeof localStorage !== 'undefined' && localStorage.getItem('propscope_gemini_api_key')) ||
+                 (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || 
                  (import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) || 
                  "";
   if (!apiKey) {
-    console.error("GEMINI_API_KEY is not defined in the environment. AI features will fail.");
+    console.error("GEMINI_API_KEY is not defined in the environment or localStorage. AI features will fail.");
     return null;
   }
   return new GoogleGenAI({ apiKey });
 };
+
+export function getStoredGeminiKey(): string {
+  return (typeof localStorage !== 'undefined' && localStorage.getItem('propscope_gemini_api_key')) || "";
+}
+
+export function setStoredGeminiKey(key: string) {
+  if (typeof localStorage !== 'undefined') {
+    if (key.trim()) {
+      localStorage.setItem('propscope_gemini_api_key', key.trim());
+    } else {
+      localStorage.removeItem('propscope_gemini_api_key');
+    }
+  }
+}
+
+export function hasGeminiKey(): boolean {
+  const key = (typeof localStorage !== 'undefined' && localStorage.getItem('propscope_gemini_api_key')) ||
+              (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || 
+              (import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) || 
+              "";
+  return !!key;
+}
 
 const MODEL_NAME = "gemini-3-flash-preview";
 
@@ -176,10 +199,10 @@ export async function searchVacantLandByArea(north: number, south: number, east:
          UTILITY REQUIREMENTS:
          - Discard listings that are "Sold", "Reserved", or missing a price.
          - Only return listings with comprehensive details (Stand size, price, clear description).
-         - SITE FOCUS: site:property24.com OR site:privateproperty.co.za
+         - SITE FOCUS: site:property24.com
          
          CRITICAL REGIONAL LOCK:
-         - ONLY return listings from South Africa (.co.za or .com).
+         - ONLY return listings from South Africa (property24.com).
          - DO NOT RETURN listings from Kenya (property24.co.ke), Nigeria, or any other country.
          
          VULNERABILITY PREVENTION:
@@ -251,8 +274,8 @@ export async function findLandListingLinks(north: number, south: number, east: n
     : "";
 
   const searchQuery = hasValidCoords
-    ? `(site:property24.com OR site:privateproperty.co.za) "vacant land" for sale near "${anchorSubstation.address}"`
-    : `(site:property24.com OR site:privateproperty.co.za) "vacant land" for sale South Africa ${north}..${south} latitude ${east}..${west} longitude`;
+    ? `site:property24.com "vacant land" for sale near "${anchorSubstation.address}"`
+    : `site:property24.com "vacant land" for sale South Africa ${north}..${south} latitude ${east}..${west} longitude`;
 
   const data = await generateAIContent<{ links: string[] }>({
     model: MODEL_NAME,
@@ -261,7 +284,7 @@ export async function findLandListingLinks(north: number, south: number, east: n
       SEARCH QUERY: ${searchQuery}
       
       VERIFICATION PROTOCOL:
-      1. ONLY return URLs from property24.com (SA) or privateproperty.co.za.
+      1. ONLY return URLs from property24.com (SA).
       2. If you are not 100% sure the URL is a real, active listing, DO NOT return it.
       3. CRITICAL: EXCLUDE property24.co.ke (Kenya) and property24.com.ng (Nigeria).
       ${substationContext}
@@ -281,7 +304,7 @@ export async function findLandListingLinks(north: number, south: number, east: n
   });
 
   return (data?.links || []).filter(link => 
-    (link.includes('property24.com/for-sale/') || link.includes('privateproperty.co.za/for-sale/')) && 
+    link.includes('property24.com/for-sale/') && 
     !link.includes('.co.ke') &&
     !link.includes('.com.ng') &&
     !link.includes('property24.co.ke') &&
@@ -298,16 +321,15 @@ export async function importPropertyListing(input: string): Promise<Property | n
   }
 
   const isP24SA = processedInput.includes('property24.com');
-  const isPrivateProperty = processedInput.includes('privateproperty.co.za');
   const isNonSA = processedInput.includes('.co.ke') || processedInput.includes('.com.ng') || processedInput.includes('property24.co.ke');
 
-  if (isNonSA || (!isP24SA && !isPrivateProperty)) {
-    console.warn("Non-South African or unsupported domain listing rejected:", processedInput);
+  if (isNonSA || !isP24SA) {
+    console.warn("Non-South African or unsupported domain listing rejected (only property24.com allowed):", processedInput);
     return null;
   }
 
   let html = "";
-  if (processedInput.startsWith('http') && (isP24SA || isPrivateProperty)) {
+  if (processedInput.startsWith('http') && isP24SA) {
     try {
       const fetchRes = await fetch(`/api/fetch-listing?url=${encodeURIComponent(processedInput)}`);
       if (fetchRes.ok && fetchRes.headers.get("Content-Type")?.includes("html")) {
@@ -409,7 +431,7 @@ export async function importPropertyListing(input: string): Promise<Property | n
     const hasPrice = property.financials?.purchasePrice && property.financials.purchasePrice > 0;
     const hasSize = property.specs?.standSize && property.specs.standSize > 0;
     const hasDesc = property.description && property.description.length > 50;
-    const isSA = property.p24Url?.includes('property24.com/for-sale/') || property.p24Url?.includes('privateproperty.co.za/for-sale/');
+    const isSA = property.p24Url?.includes('property24.com/for-sale/');
     const isNotNonSA = !property.p24Url?.includes('.co.ke') && !property.p24Url?.includes('.com.ng');
     const hasCoords = Array.isArray(property.coordinates) && property.coordinates.length === 2 && !isNaN(property.coordinates[0]);
     
@@ -491,10 +513,10 @@ export async function searchVacantLandByLocationName(location: string): Promise<
          UTILITY REQUIREMENTS:
          - Discard listings without a clear price or stand size.
          - Only return listings with comprehensive details.
-         - SITE FOCUS: site:property24.com OR site:privateproperty.co.za
+         - SITE FOCUS: site:property24.com
          
          CRITICAL REGIONAL LOCK:
-         - ONLY return listings from South Africa.
+         - ONLY return listings from South Africa (property24.com).
          - DO NOT RETURN listings from Kenya (.co.ke), Nigeria, or any other country.
          
          VULNERABILITY PREVENTION:
@@ -548,7 +570,7 @@ export async function searchVacantLandByLocationName(location: string): Promise<
 
   return (data?.properties || []).filter(p => 
     p.p24Url && 
-    (p.p24Url.includes('property24.com/for-sale/') || p.p24Url.includes('privateproperty.co.za/for-sale/')) && 
+    p.p24Url.includes('property24.com/for-sale/') && 
     p.financials?.purchasePrice > 0 &&
     p.specs?.standSize > 0 &&
     p.description?.length > 50 &&
