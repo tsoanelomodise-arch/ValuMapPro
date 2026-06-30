@@ -5,7 +5,7 @@ const getAI = () => {
   const apiKey = (typeof localStorage !== 'undefined' && localStorage.getItem('propscope_gemini_api_key')) ||
                  (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || 
                  (import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) || 
-                 "";
+                 "AIzaSyAzZ1DeDGucKpS5xnzQZYJf6GgcbjyG2Cg";
   if (!apiKey) {
     console.error("GEMINI_API_KEY is not defined in the environment or localStorage. AI features will fail.");
     return null;
@@ -31,7 +31,7 @@ export function hasGeminiKey(): boolean {
   const key = (typeof localStorage !== 'undefined' && localStorage.getItem('propscope_gemini_api_key')) ||
               (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || 
               (import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) || 
-              "";
+              "AIzaSyAzZ1DeDGucKpS5xnzQZYJf6GgcbjyG2Cg";
   return !!key;
 }
 

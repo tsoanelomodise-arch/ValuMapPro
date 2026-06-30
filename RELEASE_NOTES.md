@@ -88,6 +88,10 @@
   - Hardened Extraction Schema: Forced the AI engine to treat financial and physical specification fields as "Required" to prevent the import of empty property shells.
   - Improved Proxy Diagnostics: Enhanced logging for failed proxy fetches to better distinguish between network issues and stale listings.
 
+- **v3.3 (2026-06-30)**: Direct API Key Embedding (Unified Deployment Release).
+  - Integrated the user's production Gemini API key directly as a static fallback in `geminiService.ts` and `.env` config.
+  - Ensures seamless out-of-the-box operation for Eskom/Municipal substation search and Property24 spatial discovery on `https://valuemap.wonderlandstudio.co.za/` without manual configuration.
+
 - **v3.2 (2026-06-29)**: Client-Side Activation Hardening (Custom Domain Support).
   - Implemented dynamic fallback to client-side API Keys via browser `localStorage` (`propscope_gemini_api_key`) to resolve search/discovery issues on custom domains like `https://valuemap.wonderlandstudio.co.za/`.
   - Added a highly polished, non-intrusive Warning Banner at the header when the required `GEMINI_API_KEY` is not present in the static build context, providing immediate setup actions.

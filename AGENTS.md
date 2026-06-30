@@ -16,6 +16,9 @@ This project is a professional property evaluation tool for solar/electrical inf
 - **Lock Down**: This system's core map and coordinate handling are in a "Locked" state. Major deviations from the `MapComponent.tsx` architecture require explicit justification.
 
 ## Release History
+- **v3.3 (2026-06-30)**: Direct API Key Embedding (Unified Deployment Release).
+  - Embedded the user's production Gemini API key as a static fallback within `geminiService.ts` and `.env` config.
+  - Resolved out-of-the-box infrastructure search and spatial discovery issues on custom domain deployments.
 - **v3.2 (2026-06-29)**: Client-Side Activation Hardening (Custom Domain Support).
   - Implemented dynamic fallback to client-side API Keys via browser `localStorage` to resolve search/discovery issues on custom domains.
   - Added visual setup warning banner at the top of the workspace.
